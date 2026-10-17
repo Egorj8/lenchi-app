@@ -2,7 +2,7 @@
   "expo": {
     "name": "Lenchi Studio",
     "slug": "lenchi-studio",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -32,7 +32,17 @@
       "expo-router",
       "expo-status-bar",
       "expo-sqlite",
-      "expo-font"
+      "expo-font",
+      "expo-sharing",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 180,
+          "backgroundColor": "#1a1b1e",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "scheme": "lenchi",
     "backgroundColor": "#1a1b1e",

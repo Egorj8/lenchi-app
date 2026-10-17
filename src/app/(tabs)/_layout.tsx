@@ -1,8 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { IconName } from '@/components/ui';
+import { useDb } from '@/db/provider';
+import { emptyTrash, TRASH_DAYS } from '@/db/queries';
+import { autoBackupIfNeeded } from '@/utils/backupFiles';
 import { colors } from '@/theme';
 
 const icon = (name: IconName, active: IconName) =>
@@ -13,6 +17,13 @@ const icon = (name: IconName, active: IconName) =>
 export default function TabLayout() {
   // снизу учитываем системные кнопки Android / полоску жестов, иначе панель уходит под них
   const insets = useSafeAreaInsets();
+  const db = useDb();
+
+  // при запуске: автокопия раз в сутки и очистка корзины от старого
+  useEffect(() => {
+    autoBackupIfNeeded(db).catch((e) => console.warn('Автокопия не удалась', e));
+    emptyTrash(db, TRASH_DAYS).catch(() => {});
+  }, [db]);
   return (
     <Tabs
       screenOptions={{

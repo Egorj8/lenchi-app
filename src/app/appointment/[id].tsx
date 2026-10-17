@@ -3,9 +3,11 @@ import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router
 import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useToast } from '@/components/Toast';
 import { ActionCircle, Avatar, Badge, Button, Card, Empty, IconButton, SectionTitle, success, tap } from '@/components/ui';
 import {
   deleteAppointment,
+  restoreAppointment,
   getAppointment,
   getAppointmentServices,
   getSettings,
@@ -19,7 +21,7 @@ import { colors, radius, space, statusMeta } from '@/theme';
 import { fmtDayLong, fmtDuration, fmtTime, relativeDay } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp, reminderText } from '@/utils/messages';
 import { formatPhone } from '@/utils/phone';
-import { showAlert } from '@/utils/dialog';
+import { emitDataChanged } from '@/utils/events';
 
 export default function AppointmentScreen() {
   const db = useDb();
@@ -27,6 +29,7 @@ export default function AppointmentScreen() {
   const [a, setA] = useState<Appointment | null | undefined>(undefined);
   const [services, setServices] = useState<ApptService[]>([]);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const toast = useToast();
 
   const load = useCallback(async () => {
     const appt = await getAppointment(db, Number(id));
@@ -50,18 +53,17 @@ export default function AppointmentScreen() {
     load();
   };
 
-  const remove = () =>
-    showAlert('Удалить запись?', 'Запись исчезнет из календаря и статистики.', [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteAppointment(db, a.id);
-          router.back();
-        },
-      },
-    ]);
+  // удаляем сразу, но с возможностью вернуть (и запись остаётся в корзине)
+  const remove = async () => {
+    const id = a.id;
+    await deleteAppointment(db, id);
+    router.back();
+    toast({
+      message: 'Запись удалена',
+      icon: 'trash-outline',
+      action: { label: 'Вернуть', onPress: () => restoreAppointment(db, id).then(emitDataChanged) },
+    });
+  };
 
   const text = reminderText(a, settings);
   const phone = a.client_phone ?? '';

@@ -1,7 +1,7 @@
 import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 
 // Прайс Елены со страницы записи в ГномГуру
 const SEED_SERVICES: [string, string, number, number][] = [
@@ -26,11 +26,37 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   work_start: '11:00',
   work_end: '19:00',
   slot_length: '120',
+  last_auto_backup: '0',
+  last_shared_backup: '0',
   reminder_template:
     'Здравствуйте, {имя}! 💅 Напоминаю о записи {дата} в {время}: {услуга}.\nАдрес: {адрес}\nЕсли планы изменились, напишите, пожалуйста. {мастер}',
   slots_header: 'Не пора ли нам записаться на маникюр/педикюр на удобное время?\nМой телефон {телефон}\n\n⏱ Свободное время для записи в ближайшие дни:',
   slots_footer: 'Если не подошло ничего, пишите в личку, что-нибудь придумаем 😉',
 };
+
+async function createViews(db: Db) {
+  await db.execAsync(`
+    DROP VIEW IF EXISTS live_clients;
+    DROP VIEW IF EXISTS live_appointments;
+    CREATE VIEW live_clients AS SELECT * FROM clients WHERE deleted_at IS NULL;
+    CREATE VIEW live_appointments AS SELECT * FROM appointments WHERE deleted_at IS NULL;
+  `);
+}
+
+/** Привести все телефоны к формату +код (после миграции и восстановления старых копий) */
+export async function normalizeAllPhones(db: Db) {
+  const row = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'");
+  const country = row?.value ?? DEFAULT_SETTINGS.default_country;
+  const clients = await db.getAllAsync<{ id: number; phone: string }>('SELECT id, phone FROM clients');
+  await db.withTransactionAsync(async () => {
+    for (const c of clients) {
+      const p = normalizePhone(c.phone, country);
+      if (p !== c.phone) await db.runAsync('UPDATE clients SET phone = ? WHERE id = ?', p, c.id);
+    }
+  });
+}
+
+export const SCHEMA_VERSION = DATABASE_VERSION;
 
 export async function migrateDbIfNeeded(db: Db) {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
@@ -99,16 +125,19 @@ export async function migrateDbIfNeeded(db: Db) {
 
   if (current < 2) {
     // v2: телефоны клиенток в международном формате
-    const row2 = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'");
-    const country = row2?.value ?? DEFAULT_SETTINGS.default_country;
-    const clients = await db.getAllAsync<{ id: number; phone: string }>('SELECT id, phone FROM clients');
-    await db.withTransactionAsync(async () => {
-      for (const c of clients) {
-        const p = normalizePhone(c.phone, country);
-        if (p !== c.phone) await db.runAsync('UPDATE clients SET phone = ? WHERE id = ?', p, c.id);
-      }
-    });
+    await normalizeAllPhones(db);
   }
+
+  if (current < 3) {
+    // v3: корзина — мягкое удаление записей и клиенток
+    await db.execAsync(`
+      ALTER TABLE clients ADD COLUMN deleted_at INTEGER;
+      ALTER TABLE appointments ADD COLUMN deleted_at INTEGER;
+    `);
+  }
+  // Представления без удалённого. SELECT * фиксирует столбцы при создании,
+  // поэтому пересоздаём их при каждой миграции схемы.
+  await createViews(db);
 
   await db.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
 }

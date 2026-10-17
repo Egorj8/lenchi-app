@@ -2,10 +2,12 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useDb } from '@/db/provider';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useToast } from '@/components/Toast';
 import { Button, Field, success } from '@/components/ui';
 import { pickContact } from '@/utils/contacts';
 import { formatPhone } from '@/utils/phone';
-import { deleteClient, getClient, getSettings, saveClient } from '@/db/queries';
+import { emitDataChanged } from '@/utils/events';
+import { deleteClient, getClient, getSettings, restoreClient, saveClient } from '@/db/queries';
 import { colors, space } from '@/theme';
 import { todayKey } from '@/utils/date';
 import { showAlert } from '@/utils/dialog';
@@ -19,6 +21,7 @@ export default function ClientEdit() {
   const [telegram, setTelegram] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!editId) return;
@@ -52,19 +55,17 @@ export default function ClientEdit() {
     if (c.phones[0]) setPhone(formatPhone(c.phones[0]));
   };
 
-  const remove = () =>
-    showAlert('Удалить клиентку?', 'Её записи останутся в календаре, но без имени.', [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteClient(db, editId!);
-          router.dismissAll();
-          router.navigate('/clients');
-        },
-      },
-    ]);
+  const remove = async () => {
+    const id = editId!;
+    await deleteClient(db, id);
+    router.dismissAll();
+    router.navigate('/clients');
+    toast({
+      message: `${name.trim() || 'Клиентка'} — в корзине`,
+      icon: 'trash-outline',
+      action: { label: 'Вернуть', onPress: () => restoreClient(db, id).then(emitDataChanged) },
+    });
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>

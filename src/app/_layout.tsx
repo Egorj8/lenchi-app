@@ -2,6 +2,7 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Suspense } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { ToastProvider } from '@/components/Toast';
 import { DbProvider } from '@/db/provider';
 import { migrateDbIfNeeded } from '@/db/schema';
 import { colors } from '@/theme';
@@ -32,6 +33,7 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Suspense fallback={<Loading />}>
         <DbProvider onInit={migrateDbIfNeeded}>
+          <ToastProvider>
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: colors.bg },
@@ -52,7 +54,10 @@ export default function RootLayout() {
             <Stack.Screen name="service-edit" options={{ presentation: 'modal', title: 'Услуга' }} />
             <Stack.Screen name="slots" options={{ title: 'Свободные окошки' }} />
             <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
+            <Stack.Screen name="trash" options={{ title: 'Корзина' }} />
+            <Stack.Screen name="backups" options={{ title: 'Автокопии' }} />
           </Stack>
+          </ToastProvider>
         </DbProvider>
       </Suspense>
     </ThemeProvider>

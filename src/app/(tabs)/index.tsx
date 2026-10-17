@@ -12,6 +12,7 @@ import { colors, radius, space } from '@/theme';
 import { addMonths, monthGrid, sameMonth, weekDays } from '@/utils/calendar';
 import { addDays, fmtDayLong, fmtDayShort, fmtMonth, fromKey, nowMinutes, parseTime, plural, relativeDay, todayKey, weekday, weekdayShort } from '@/utils/date';
 import { money, workDays as getWorkDays } from '@/utils/messages';
+import { useDataChanged } from '@/utils/events';
 
 type Mode = 'day' | 'week' | 'month';
 const MODES: [Mode, string][] = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']];
@@ -59,6 +60,7 @@ export default function CalendarScreen() {
   }, [db, mode, selected, week, tick]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  useDataChanged(load);
 
   const cur = settings?.currency ?? '₺';
   const wd = settings ? getWorkDays(settings) : [1, 2, 3, 4, 5];

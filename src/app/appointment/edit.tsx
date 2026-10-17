@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useDb } from '@/db/provider';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Field, SectionTitle, success, tap, styles as ui } from '@/components/ui';
 import {
   findConflicts,
@@ -32,6 +33,10 @@ export default function AppointmentEdit() {
   const db = useDb();
   const params = useLocalSearchParams<{ id?: string; date?: string; start?: string; clientId?: string }>();
   const editId = params.id ? Number(params.id) : undefined;
+  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const savedRef = useRef(false);
+  const dirtyRef = useRef(false);
 
   const [settings, setSettings] = useState<Settings | null>(null);
   const [services, setServices] = useState<Service[]>([]);
@@ -146,6 +151,22 @@ export default function AppointmentEdit() {
 
   const toggleService = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
+  // Новая запись: если что-то уже выбрано, «Назад» спрашивает, а не теряет введённое молча
+  dirtyRef.current =
+    !editId && (picked.length > 0 || !!newName.trim() || !!notes.trim() || (clientId !== null && !params.clientId));
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (savedRef.current || !dirtyRef.current) return;
+        e.preventDefault();
+        showAlert('Выйти без сохранения?', 'Новая запись не сохранится.', [
+          { text: 'Остаться', style: 'cancel' },
+          { text: 'Выйти', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+        ]);
+      }),
+    [navigation],
+  );
+
   async function save(force = false) {
     if (start === null) return showAlert('Выберите время', 'Нажмите на свободное время в списке.');
     if (newClient && !newName.trim()) return showAlert('Имя клиентки', 'Введите имя или выберите клиентку из списка.');
@@ -169,6 +190,7 @@ export default function AppointmentEdit() {
       if (newClient) cid = await saveClient(db, { name: newName, phone: newPhone, telegram: '', notes: '' });
       const id = await saveAppointment(db, { id: editId, client_id: cid, date, start, duration, price, notes, services: chosen });
       success();
+      savedRef.current = true;
       if (editId) router.back();
       else router.replace(`/appointment/${id}`);
     } finally {
@@ -318,15 +340,17 @@ export default function AppointmentEdit() {
           </View>
         </View>
         <Field label="Заметка" value={notes} onChangeText={setNotes} placeholder="Дизайн, пожелания, аллергия…" multiline />
+        <View style={{ height: 24 }} />
+      </ScrollView>
 
-        <View style={s.total}>
-          <Text style={s.totalLabel}>Итого</Text>
+      {/* итог и кнопка всегда видны — не нужно листать длинную форму */}
+      <View style={[s.footer, { paddingBottom: insets.bottom + space.md }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={s.totalLabel}>{start !== null ? `${fmtTime(start)} – ${fmtTime(start + duration)}` : 'Время не выбрано'}</Text>
           <Text style={s.totalValue}>{money(price, cur)}</Text>
         </View>
-
-        <Button title={editId ? 'Сохранить' : 'Записать'} icon="checkmark" onPress={() => save()} loading={saving} />
-        <View style={{ height: 40 }} />
-      </ScrollView>
+        <Button title={editId ? 'Сохранить' : 'Записать'} icon="checkmark" onPress={() => save()} loading={saving} style={{ minWidth: 170 }} />
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -365,10 +389,10 @@ const s = StyleSheet.create({
   dayWd: { color: colors.muted, fontSize: 12, fontWeight: '600' },
   dayNum: { color: colors.text, fontSize: 19, fontWeight: '800' },
   times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  total: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: space.lg, marginBottom: space.md, borderTopWidth: 1, borderTopColor: colors.border,
+  footer: {
+    flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.md,
+    backgroundColor: colors.bg2, borderTopWidth: 1, borderTopColor: colors.border,
   },
-  totalLabel: { color: colors.muted, fontSize: 16 },
-  totalValue: { color: colors.yellow1, fontSize: 26, fontWeight: '800' },
+  totalLabel: { color: colors.muted, fontSize: 13 },
+  totalValue: { color: colors.yellow1, fontSize: 24, fontWeight: '800' },
 });

@@ -9,6 +9,7 @@ import { financeSummary, getSettings, type FinanceSummary } from '@/db/queries';
 import { colors, gradients, radius, space } from '@/theme';
 import { addDays, fromKey, range, todayKey, toKey, weekdayShort, plural } from '@/utils/date';
 import { money } from '@/utils/messages';
+import { useDataChanged } from '@/utils/events';
 
 type Period = 'week' | 'month' | 'year';
 
@@ -42,6 +43,7 @@ export default function FinanceScreen() {
   }, [db, from, to]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  useDataChanged(load);
 
   // Для недели — столбики по дням, для месяца и года — топ дней
   const bars = useMemo(() => {

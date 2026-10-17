@@ -100,11 +100,11 @@ export async function saveService(db: Db, s: Omit<Service, 'id' | 'sort' | 'arch
 
 const CLIENT_STATS = `
   SELECT c.*,
-    (SELECT COUNT(*) FROM appointments a WHERE a.client_id = c.id AND a.status = 'done') AS visits,
-    (SELECT COALESCE(SUM(price), 0) FROM appointments a WHERE a.client_id = c.id AND a.status = 'done') AS spent,
-    (SELECT MAX(date) FROM appointments a WHERE a.client_id = c.id AND a.status = 'done') AS last_visit,
-    (SELECT MIN(date) FROM appointments a WHERE a.client_id = c.id AND a.status = 'planned' AND a.date >= ?) AS next_visit
-  FROM clients c`;
+    (SELECT COUNT(*) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS visits,
+    (SELECT COALESCE(SUM(price), 0) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS spent,
+    (SELECT MAX(date) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS last_visit,
+    (SELECT MIN(date) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'planned' AND a.date >= ?) AS next_visit
+  FROM live_clients c`;
 
 export function listClients(db: Db, today: string, query = '') {
   const q = `%${query.trim().toLowerCase()}%`;
@@ -135,12 +135,12 @@ export async function saveClient(db: Db, c: { id?: number; name: string; phone: 
 
 /** Клиентка с таким же номером (номера в базе хранятся в формате +...) */
 export function findClientByPhone(db: Db, phone: string) {
-  return db.getFirstAsync<Client>("SELECT * FROM clients WHERE phone = ? AND phone != '' LIMIT 1", phone);
+  return db.getFirstAsync<Client>("SELECT * FROM live_clients WHERE phone = ? AND phone != '' LIMIT 1", phone);
 }
 
 /** Множество номеров, которые уже есть в базе */
 export async function existingPhones(db: Db): Promise<Set<string>> {
-  const rows = await db.getAllAsync<{ phone: string }>("SELECT phone FROM clients WHERE phone != ''");
+  const rows = await db.getAllAsync<{ phone: string }>("SELECT phone FROM live_clients WHERE phone != ''");
   return new Set(rows.map((r) => r.phone));
 }
 
@@ -158,8 +158,13 @@ export async function importClients(db: Db, items: { name: string; phone: string
   return items.length;
 }
 
+/** В корзину (можно вернуть) */
 export async function deleteClient(db: Db, id: number) {
-  await db.runAsync('DELETE FROM clients WHERE id = ?', id);
+  await db.runAsync('UPDATE clients SET deleted_at = ? WHERE id = ?', Date.now(), id);
+}
+
+export async function restoreClient(db: Db, id: number) {
+  await db.runAsync('UPDATE clients SET deleted_at = NULL WHERE id = ?', id);
 }
 
 // ---------- Записи ----------
@@ -167,7 +172,7 @@ export async function deleteClient(db: Db, id: number) {
 const APPT_SELECT = `
   SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram,
     (SELECT GROUP_CONCAT(name, ', ') FROM appointment_services s WHERE s.appointment_id = a.id) AS services_label
-  FROM appointments a LEFT JOIN clients c ON c.id = a.client_id`;
+  FROM live_appointments a LEFT JOIN clients c ON c.id = a.client_id`;
 
 export function listAppointmentsByDate(db: Db, date: string) {
   return db.getAllAsync<Appointment>(`${APPT_SELECT} WHERE a.date = ? ORDER BY a.start`, date);
@@ -192,7 +197,7 @@ export function getAppointmentServices(db: Db, id: number) {
 /** Дни, в которых есть активные записи (для точек в календаре) */
 export async function busyDays(db: Db, from: string, to: string) {
   const rows = await db.getAllAsync<{ date: string; n: number }>(
-    "SELECT date, COUNT(*) AS n FROM appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
+    "SELECT date, COUNT(*) AS n FROM live_appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
     from, to,
   );
   return Object.fromEntries(rows.map((r) => [r.date, r.n])) as Record<string, number>;
@@ -201,7 +206,7 @@ export async function busyDays(db: Db, from: string, to: string) {
 /** Число записей и сумма по дням (для вида «Месяц») */
 export async function dayStats(db: Db, from: string, to: string) {
   const rows = await db.getAllAsync<{ date: string; n: number; sum: number }>(
-    "SELECT date, COUNT(*) AS n, COALESCE(SUM(price), 0) AS sum FROM appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
+    "SELECT date, COUNT(*) AS n, COALESCE(SUM(price), 0) AS sum FROM live_appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
     from, to,
   );
   return Object.fromEntries(rows.map((r) => [r.date, { n: r.n, sum: r.sum }])) as Record<string, { n: number; sum: number }>;
@@ -250,8 +255,60 @@ export async function setAppointmentStatus(db: Db, id: number, status: Status) {
   await db.runAsync('UPDATE appointments SET status = ? WHERE id = ?', status, id);
 }
 
+/** В корзину (можно вернуть) */
 export async function deleteAppointment(db: Db, id: number) {
+  await db.runAsync('UPDATE appointments SET deleted_at = ? WHERE id = ?', Date.now(), id);
+}
+
+export async function restoreAppointment(db: Db, id: number) {
+  await db.runAsync('UPDATE appointments SET deleted_at = NULL WHERE id = ?', id);
+}
+
+// ---------- Корзина ----------
+
+export const TRASH_DAYS = 30;
+
+export type TrashAppointment = {
+  id: number; date: string; start: number; price: number; deleted_at: number;
+  client_name: string | null; services_label: string | null;
+};
+export type TrashClient = { id: number; name: string; phone: string; deleted_at: number };
+
+export function listTrashAppointments(db: Db) {
+  return db.getAllAsync<TrashAppointment>(
+    `SELECT a.id, a.date, a.start, a.price, a.deleted_at, c.name AS client_name,
+       (SELECT GROUP_CONCAT(name, ', ') FROM appointment_services s WHERE s.appointment_id = a.id) AS services_label
+     FROM appointments a LEFT JOIN clients c ON c.id = a.client_id
+     WHERE a.deleted_at IS NOT NULL ORDER BY a.deleted_at DESC`,
+  );
+}
+
+export function listTrashClients(db: Db) {
+  return db.getAllAsync<TrashClient>('SELECT id, name, phone, deleted_at FROM clients WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC');
+}
+
+export async function trashCount(db: Db) {
+  const r = await db.getFirstAsync<{ n: number }>(
+    'SELECT (SELECT COUNT(*) FROM appointments WHERE deleted_at IS NOT NULL) + (SELECT COUNT(*) FROM clients WHERE deleted_at IS NOT NULL) AS n',
+  );
+  return r?.n ?? 0;
+}
+
+/** Удалить навсегда. У записей удалённой клиентки поле клиента станет пустым (ON DELETE SET NULL). */
+export async function purgeAppointment(db: Db, id: number) {
   await db.runAsync('DELETE FROM appointments WHERE id = ?', id);
+}
+export async function purgeClient(db: Db, id: number) {
+  await db.runAsync('DELETE FROM clients WHERE id = ?', id);
+}
+
+/** Очистить корзину целиком или только то, что лежит дольше olderThanDays */
+export async function emptyTrash(db: Db, olderThanDays = 0) {
+  const before = Date.now() - olderThanDays * 86_400_000;
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM appointments WHERE deleted_at IS NOT NULL AND deleted_at <= ?', before);
+    await db.runAsync('DELETE FROM clients WHERE deleted_at IS NOT NULL AND deleted_at <= ?', before);
+  });
 }
 
 // ---------- Финансы ----------
@@ -269,19 +326,19 @@ export type FinanceSummary = {
 
 export async function financeSummary(db: Db, from: string, to: string): Promise<FinanceSummary> {
   const done = await db.getFirstAsync<{ s: number; n: number }>(
-    "SELECT COALESCE(SUM(price),0) AS s, COUNT(*) AS n FROM appointments WHERE status='done' AND date BETWEEN ? AND ?", from, to);
+    "SELECT COALESCE(SUM(price),0) AS s, COUNT(*) AS n FROM live_appointments WHERE status='done' AND date BETWEEN ? AND ?", from, to);
   const planned = await db.getFirstAsync<{ s: number; n: number }>(
-    "SELECT COALESCE(SUM(price),0) AS s, COUNT(*) AS n FROM appointments WHERE status='planned' AND date BETWEEN ? AND ?", from, to);
+    "SELECT COALESCE(SUM(price),0) AS s, COUNT(*) AS n FROM live_appointments WHERE status='planned' AND date BETWEEN ? AND ?", from, to);
   const noShow = await db.getFirstAsync<{ n: number }>(
-    "SELECT COUNT(*) AS n FROM appointments WHERE status='no_show' AND date BETWEEN ? AND ?", from, to);
+    "SELECT COUNT(*) AS n FROM live_appointments WHERE status='no_show' AND date BETWEEN ? AND ?", from, to);
   const byDay = await db.getAllAsync<{ date: string; sum: number }>(
-    "SELECT date, SUM(price) AS sum FROM appointments WHERE status='done' AND date BETWEEN ? AND ? GROUP BY date ORDER BY date", from, to);
+    "SELECT date, SUM(price) AS sum FROM live_appointments WHERE status='done' AND date BETWEEN ? AND ? GROUP BY date ORDER BY date", from, to);
   const topServices = await db.getAllAsync<{ name: string; n: number; sum: number }>(
     `SELECT s.name, COUNT(*) AS n, SUM(s.price) AS sum FROM appointment_services s
-     JOIN appointments a ON a.id = s.appointment_id
+     JOIN live_appointments a ON a.id = s.appointment_id
      WHERE a.status='done' AND a.date BETWEEN ? AND ? GROUP BY s.name ORDER BY n DESC, sum DESC LIMIT 5`, from, to);
   const newClients = await db.getFirstAsync<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM (SELECT client_id, MIN(date) AS first FROM appointments
+    `SELECT COUNT(*) AS n FROM (SELECT client_id, MIN(date) AS first FROM live_appointments
      WHERE status='done' AND client_id IS NOT NULL GROUP BY client_id) WHERE first BETWEEN ? AND ?`, from, to);
   return {
     revenue: done?.s ?? 0,
@@ -292,20 +349,5 @@ export async function financeSummary(db: Db, from: string, to: string): Promise<
     byDay,
     topServices,
     newClients: newClients?.n ?? 0,
-  };
-}
-
-// ---------- Резервная копия ----------
-
-export async function exportAll(db: Db) {
-  return {
-    app: 'lenchi-studio',
-    version: 1,
-    exported_at: new Date().toISOString(),
-    settings: await db.getAllAsync('SELECT * FROM settings'),
-    services: await db.getAllAsync('SELECT * FROM services'),
-    clients: await db.getAllAsync('SELECT * FROM clients'),
-    appointments: await db.getAllAsync('SELECT * FROM appointments'),
-    appointment_services: await db.getAllAsync('SELECT * FROM appointment_services'),
   };
 }

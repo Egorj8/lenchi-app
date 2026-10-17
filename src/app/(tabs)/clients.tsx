@@ -9,6 +9,7 @@ import { listClients, type ClientRow } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
 import { formatPhone } from '@/utils/phone';
+import { useDataChanged } from '@/utils/events';
 
 export default function ClientsScreen() {
   const db = useDb();
@@ -20,6 +21,7 @@ export default function ClientsScreen() {
   }, [db, query]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  useDataChanged(load);
 
   return (
     <SafeAreaView style={s.screen} edges={['top']}>
