@@ -30,6 +30,12 @@
       "expo-font"
     ],
     "scheme": "lenchi",
-    "backgroundColor": "#1a1b1e"
+    "backgroundColor": "#1a1b1e",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "91c4bc1d-f238-4537-945a-56080d602760"
+      }
+    }
   }
 }
