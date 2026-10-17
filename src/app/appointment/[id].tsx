@@ -18,6 +18,7 @@ import {
 import { colors, radius, space, statusMeta } from '@/theme';
 import { fmtDayLong, fmtDuration, fmtTime, relativeDay } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp, reminderText } from '@/utils/messages';
+import { formatPhone } from '@/utils/phone';
 import { showAlert } from '@/utils/dialog';
 
 export default function AppointmentScreen() {
@@ -92,7 +93,7 @@ export default function AppointmentScreen() {
           <Avatar name={a.client_name ?? '?'} size={48} />
           <View style={{ flex: 1 }}>
             <Text style={s.clientName}>{a.client_name}</Text>
-            <Text style={s.muted}>{phone || (tg ? `@${tg}` : 'Нет контактов')}</Text>
+            <Text style={s.muted}>{formatPhone(phone) || (tg ? `@${tg}` : 'Нет контактов')}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={colors.dim} />
         </Card>

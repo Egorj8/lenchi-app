@@ -22,6 +22,8 @@ import {
 import { colors, radius, space } from '@/theme';
 import { fmtDuration, fmtTime, fromKey, parseTime, range, todayKey, weekday, weekdayShort, fmtDayLong } from '@/utils/date';
 import { money, workDays } from '@/utils/messages';
+import { pickContact } from '@/utils/contacts';
+import { formatPhone } from '@/utils/phone';
 import { showAlert } from '@/utils/dialog';
 
 const STEP = 15;
@@ -97,13 +99,19 @@ export default function AppointmentEdit() {
   const price = priceOverride !== '' ? Number(priceOverride.replace(',', '.')) || 0 : autoPrice;
   const cur = settings?.currency ?? '₺';
 
-  const dates = useMemo(() => range(todayKey() < date ? todayKey() : date, 60), [date]);
+  // список дат: от сегодня (или выбранной даты в прошлом) и не меньше чем до выбранной + 2 недели
+  const dates = useMemo(() => {
+    const start = todayKey() < date ? todayKey() : date;
+    const span = Math.round((fromKey(date).getTime() - fromKey(start).getTime()) / 86_400_000);
+    return range(start, Math.max(60, span + 14));
+  }, [date]);
 
   // Сетка времени: шаг 15 минут в рабочие часы, занятые слоты отмечены
   const timeGrid = useMemo(() => {
     if (!settings) return [];
-    const ws = parseTime(settings.work_start) ?? 600;
-    const we = parseTime(settings.work_end) ?? 1140;
+    // час до и после рабочего дня — чтобы можно было записать вне графика
+    const ws = Math.max(0, (parseTime(settings.work_start) ?? 600) - 60);
+    const we = Math.min(1440, (parseTime(settings.work_end) ?? 1140) + 60);
     const busy = dayAppts.filter((a) => a.status !== 'cancelled' && a.id !== editId);
     const out: { t: number; free: boolean }[] = [];
     for (let t = ws; t + STEP <= we; t += STEP) {
@@ -119,6 +127,22 @@ export default function AppointmentEdit() {
     return !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.telegram.toLowerCase().includes(q);
   });
   const selectedClient = clients.find((c) => c.id === clientId);
+
+  // Выбор из телефонной книги: если номер уже в базе — берём эту клиентку
+  const fromContacts = async () => {
+    const c = await pickContact(settings?.default_country ?? '90');
+    if (!c) return;
+    const existing = clients.find((cl) => cl.phone && c.phones.includes(cl.phone));
+    if (existing) {
+      setNewClient(false);
+      setClientId(existing.id);
+      return;
+    }
+    setClientId(null);
+    setNewClient(true);
+    setNewName(c.name);
+    setNewPhone(c.phones[0] ? formatPhone(c.phones[0]) : '');
+  };
 
   const toggleService = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -161,9 +185,14 @@ export default function AppointmentEdit() {
         {/* Клиент */}
         <SectionTitle
           right={
-            <Pressable onPress={() => { tap(); setNewClient((v) => !v); setClientId(null); }}>
-              <Text style={s.link}>{newClient ? 'Выбрать из списка' : '+ Новая клиентка'}</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              <Pressable onPress={() => { tap(); fromContacts(); }} hitSlop={6}>
+                <Text style={s.link}>Из контактов</Text>
+              </Pressable>
+              <Pressable onPress={() => { tap(); setNewClient((v) => !v); setClientId(null); }} hitSlop={6}>
+                <Text style={s.link}>{newClient ? 'Из базы' : '+ Новая'}</Text>
+              </Pressable>
+            </View>
           }
         >
           Клиентка
@@ -179,7 +208,7 @@ export default function AppointmentEdit() {
             <Avatar name={selectedClient.name} size={40} />
             <View style={{ flex: 1 }}>
               <Text style={s.clientName}>{selectedClient.name}</Text>
-              {selectedClient.phone ? <Text style={s.clientSub}>{selectedClient.phone}</Text> : null}
+              {selectedClient.phone ? <Text style={s.clientSub}>{formatPhone(selectedClient.phone)}</Text> : null}
             </View>
             <Ionicons name="close-circle" size={22} color={colors.dim} />
           </Pressable>
@@ -198,14 +227,14 @@ export default function AppointmentEdit() {
             </View>
             {filteredClients.length === 0 ? (
               <Text style={s.muted}>
-                {clients.length ? 'Никого не нашли.' : 'Клиентов пока нет.'} Нажмите «+ Новая клиентка».
+                {clients.length ? 'Никого не нашли.' : 'Клиентов пока нет.'} Выберите «Из контактов» или «+ Новая».
               </Text>
             ) : (
               filteredClients.slice(0, 6).map((c) => (
                 <Pressable key={c.id} onPress={() => { tap(); setClientId(c.id); }} style={({ pressed }) => [s.clientRow, pressed && { opacity: 0.6 }]}>
                   <Avatar name={c.name} size={36} />
                   <Text style={[s.clientName, { flex: 1 }]}>{c.name}</Text>
-                  <Text style={s.clientSub}>{c.phone}</Text>
+                  <Text style={s.clientSub}>{formatPhone(c.phone)}</Text>
                 </Pressable>
               ))
             )}

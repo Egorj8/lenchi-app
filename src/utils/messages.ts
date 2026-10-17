@@ -3,8 +3,10 @@ import { Linking, Platform } from 'react-native';
 import type { Appointment, Settings } from '@/db/queries';
 import { fmtDayLong, fmtTime, parseTime, weekday, addDays, nowMinutes, todayKey } from './date';
 import { showAlert } from '@/utils/dialog';
+import { phoneKey } from '@/utils/phone';
 
-export const digits = (phone: string) => phone.replace(/\D/g, '');
+// цифры международного номера (старые записи без +90 тоже приводим)
+export const digits = (phone: string) => (phone.trim() ? phoneKey(phone) : '');
 
 export function fill(template: string, vars: Record<string, string>) {
   return template.replace(/\{([^}]+)\}/g, (m, k: string) => vars[k] ?? m);

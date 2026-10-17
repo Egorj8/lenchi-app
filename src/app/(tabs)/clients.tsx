@@ -4,10 +4,11 @@ import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Avatar, Card, Empty, Fab, ScreenTitle } from '@/components/ui';
+import { Avatar, Button, Card, Empty, Fab, IconButton, ScreenTitle } from '@/components/ui';
 import { listClients, type ClientRow } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
+import { formatPhone } from '@/utils/phone';
 
 export default function ClientsScreen() {
   const db = useDb();
@@ -26,6 +27,7 @@ export default function ClientsScreen() {
         <ScreenTitle
           subtitle={clients.length ? `${clients.length} ${plural(clients.length, 'клиентка', 'клиентки', 'клиенток')}` : 'База клиентов'}
           title="Клиенты"
+          right={<IconButton icon="cloud-download-outline" label="Импорт из контактов" color={colors.yellow} onPress={() => router.push('/client/import')} />}
         />
         <View style={s.search}>
           <Ionicons name="search" size={18} color={colors.dim} />
@@ -50,8 +52,12 @@ export default function ClientsScreen() {
           <Empty
             icon="people-outline"
             title={query ? 'Никого не нашли' : 'Пока нет клиентов'}
-            text={query ? 'Попробуйте другой запрос.' : 'Добавьте первую клиентку кнопкой «+» или прямо при создании записи.'}
-          />
+            text={query ? 'Попробуйте другой запрос.' : 'Перенесите клиенток из контактов телефона или добавьте вручную кнопкой «+».'}
+          >
+            {query ? null : (
+              <Button title="Импорт из контактов" icon="people" onPress={() => router.push('/client/import')} style={{ marginTop: 12 }} />
+            )}
+          </Empty>
         }
         renderItem={({ item: c }) => (
           <Card style={s.row} onPress={() => router.push(`/client/${c.id}`)}>
@@ -63,7 +69,7 @@ export default function ClientsScreen() {
                   ? `Следующий визит: ${fmtDayShort(c.next_visit)}`
                   : c.last_visit
                     ? `Была ${fmtDayShort(c.last_visit)} · ${c.visits} ${plural(c.visits, 'визит', 'визита', 'визитов')}`
-                    : c.phone || (c.telegram ? `@${c.telegram}` : 'Нет визитов')}
+                    : formatPhone(c.phone) || (c.telegram ? `@${c.telegram}` : 'Нет визитов')}
               </Text>
             </View>
             {c.next_visit ? <View style={s.dot} /> : null}

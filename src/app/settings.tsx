@@ -7,6 +7,7 @@ import { getSettings, saveSettings, type Settings } from '@/db/queries';
 import { DEFAULT_SETTINGS } from '@/db/schema';
 import { colors, space } from '@/theme';
 import { parseTime } from '@/utils/date';
+import { COUNTRIES } from '@/utils/phone';
 import { showAlert } from '@/utils/dialog';
 
 const WEEK = [
@@ -50,6 +51,11 @@ export default function SettingsScreen() {
         <Text style={st.label}>Валюта</Text>
         <View style={st.row}>
           {CURRENCIES.map((c) => <Chip key={c} label={c} selected={s.currency === c} onPress={() => set('currency')(c)} />)}
+        </View>
+
+        <Text style={st.label}>Код страны для номеров без «+»</Text>
+        <View style={st.row}>
+          {COUNTRIES.map((c) => <Chip key={c.code} label={c.label} selected={s.default_country === c.code} onPress={() => set('default_country')(c.code)} />)}
         </View>
 
         <SectionTitle>График</SectionTitle>

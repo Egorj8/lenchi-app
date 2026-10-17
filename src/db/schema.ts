@@ -1,6 +1,7 @@
+import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 // Прайс Елены со страницы записи в ГномГуру
 const SEED_SERVICES: [string, string, number, number][] = [
@@ -18,6 +19,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   master_name: 'Елена',
   studio_name: 'Lenchi Studio',
   currency: '₺',
+  default_country: '90',
   phone: '+7 995 100-05-16',
   address: 'Mandalin site, А блок, 12 эт., 23 кв. Домофон: 23#',
   work_days: '2,4,5',
@@ -91,6 +93,19 @@ export async function migrateDbIfNeeded(db: Db) {
           'INSERT INTO services (name, description, duration, price, sort) VALUES (?, ?, ?, ?, ?)',
           name, description, duration, price, i++,
         );
+      }
+    });
+  }
+
+  if (current < 2) {
+    // v2: телефоны клиенток в международном формате
+    const row2 = await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'");
+    const country = row2?.value ?? DEFAULT_SETTINGS.default_country;
+    const clients = await db.getAllAsync<{ id: number; phone: string }>('SELECT id, phone FROM clients');
+    await db.withTransactionAsync(async () => {
+      for (const c of clients) {
+        const p = normalizePhone(c.phone, country);
+        if (p !== c.phone) await db.runAsync('UPDATE clients SET phone = ? WHERE id = ?', p, c.id);
       }
     });
   }

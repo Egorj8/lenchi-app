@@ -3,7 +3,9 @@ import { useDb } from '@/db/provider';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Button, Field, success } from '@/components/ui';
-import { deleteClient, getClient, saveClient } from '@/db/queries';
+import { pickContact } from '@/utils/contacts';
+import { formatPhone } from '@/utils/phone';
+import { deleteClient, getClient, getSettings, saveClient } from '@/db/queries';
 import { colors, space } from '@/theme';
 import { todayKey } from '@/utils/date';
 import { showAlert } from '@/utils/dialog';
@@ -23,7 +25,7 @@ export default function ClientEdit() {
     getClient(db, editId, todayKey()).then((c) => {
       if (!c) return;
       setName(c.name);
-      setPhone(c.phone);
+      setPhone(formatPhone(c.phone));
       setTelegram(c.telegram);
       setNotes(c.notes);
     });
@@ -40,6 +42,14 @@ export default function ClientEdit() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const fromContacts = async () => {
+    const s = await getSettings(db);
+    const c = await pickContact(s.default_country);
+    if (!c) return;
+    if (c.name) setName(c.name);
+    if (c.phones[0]) setPhone(formatPhone(c.phones[0]));
   };
 
   const remove = () =>
@@ -60,6 +70,7 @@ export default function ClientEdit() {
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen options={{ title: editId ? 'Изменить клиентку' : 'Новая клиентка' }} />
       <ScrollView contentContainerStyle={{ padding: space.lg }} keyboardShouldPersistTaps="handled">
+        <Button title="Выбрать из контактов" icon="people-outline" variant="secondary" onPress={fromContacts} style={{ marginBottom: space.lg }} />
         <Field label="Имя" value={name} onChangeText={setName} placeholder="Имя и фамилия" autoFocus={!editId} />
         <Field
           label="Телефон"

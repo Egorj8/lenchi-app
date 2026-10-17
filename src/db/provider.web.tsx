@@ -86,10 +86,11 @@ class WebDb implements Db {
     window.addEventListener('pagehide', () => this.flush());
   }
 
+  // Сохраняем сразу после изменения (в следующем тике, чтобы объединить пачку запросов):
+  // при задержке последняя правка терялась, если быстро закрыть вкладку.
   private scheduleSave() {
-    if (this.inTx) return;
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.flush(), 250);
+    if (this.inTx || this.saveTimer) return;
+    this.saveTimer = setTimeout(() => this.flush(), 0);
   }
 
   flush() {

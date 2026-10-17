@@ -1,3 +1,4 @@
+import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 import { DEFAULT_SETTINGS } from './schema';
 
@@ -118,16 +119,43 @@ export function getClient(db: Db, id: number, today: string) {
 }
 
 export async function saveClient(db: Db, c: { id?: number; name: string; phone: string; telegram: string; notes: string }) {
+  const country = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'"))?.value ?? '90';
+  const phone = normalizePhone(c.phone, country);
   const tg = c.telegram.trim().replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '');
   if (c.id) {
-    await db.runAsync('UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ? WHERE id = ?', c.name.trim(), c.phone.trim(), tg, c.notes, c.id);
+    await db.runAsync('UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ? WHERE id = ?', c.name.trim(), phone, tg, c.notes, c.id);
     return c.id;
   }
   const r = await db.runAsync(
     'INSERT INTO clients (name, phone, telegram, notes, created_at) VALUES (?, ?, ?, ?, ?)',
-    c.name.trim(), c.phone.trim(), tg, c.notes, Date.now(),
+    c.name.trim(), phone, tg, c.notes, Date.now(),
   );
   return r.lastInsertRowId;
+}
+
+/** Клиентка с таким же номером (номера в базе хранятся в формате +...) */
+export function findClientByPhone(db: Db, phone: string) {
+  return db.getFirstAsync<Client>("SELECT * FROM clients WHERE phone = ? AND phone != '' LIMIT 1", phone);
+}
+
+/** Множество номеров, которые уже есть в базе */
+export async function existingPhones(db: Db): Promise<Set<string>> {
+  const rows = await db.getAllAsync<{ phone: string }>("SELECT phone FROM clients WHERE phone != ''");
+  return new Set(rows.map((r) => r.phone));
+}
+
+/** Пакетный импорт из контактов телефона. Номера уже нормализованы. */
+export async function importClients(db: Db, items: { name: string; phone: string }[]) {
+  const now = Date.now();
+  await db.withTransactionAsync(async () => {
+    for (const it of items) {
+      await db.runAsync(
+        "INSERT INTO clients (name, phone, telegram, notes, created_at) VALUES (?, ?, '', '', ?)",
+        it.name.trim(), it.phone, now,
+      );
+    }
+  });
+  return items.length;
 }
 
 export async function deleteClient(db: Db, id: number) {
@@ -168,6 +196,15 @@ export async function busyDays(db: Db, from: string, to: string) {
     from, to,
   );
   return Object.fromEntries(rows.map((r) => [r.date, r.n])) as Record<string, number>;
+}
+
+/** Число записей и сумма по дням (для вида «Месяц») */
+export async function dayStats(db: Db, from: string, to: string) {
+  const rows = await db.getAllAsync<{ date: string; n: number; sum: number }>(
+    "SELECT date, COUNT(*) AS n, COALESCE(SUM(price), 0) AS sum FROM appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
+    from, to,
+  );
+  return Object.fromEntries(rows.map((r) => [r.date, { n: r.n, sum: r.sum }])) as Record<string, { n: number; sum: number }>;
 }
 
 /** Записи, пересекающиеся с интервалом (кроме отменённых и самой редактируемой) */

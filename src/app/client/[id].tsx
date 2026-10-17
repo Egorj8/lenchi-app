@@ -8,6 +8,7 @@ import { getClient, getSettings, listClientAppointments, type Appointment, type 
 import { colors, space, statusMeta } from '@/theme';
 import { fmtDayLong, fmtDayShort, fmtTime, todayKey } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp } from '@/utils/messages';
+import { formatPhone } from '@/utils/phone';
 
 export default function ClientScreen() {
   const db = useDb();
@@ -51,7 +52,7 @@ export default function ClientScreen() {
         <Avatar name={c.name} size={84} />
         <GradientText style={s.name}>{c.name}</GradientText>
         <Text style={s.muted}>
-          {[c.phone, c.telegram ? `@${c.telegram}` : ''].filter(Boolean).join(' · ') || 'Контакты не указаны'}
+          {[formatPhone(c.phone), c.telegram ? `@${c.telegram}` : ''].filter(Boolean).join(' · ') || 'Контакты не указаны'}
         </Text>
       </View>
 
