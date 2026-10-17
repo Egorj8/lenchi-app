@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -29,7 +29,7 @@ function periodRange(p: Period): [string, string, string] {
 }
 
 export default function FinanceScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [period, setPeriod] = useState<Period>('week');
   const [data, setData] = useState<FinanceSummary | null>(null);
   const [cur, setCur] = useState('₺');

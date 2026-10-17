@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -10,7 +10,7 @@ import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
 
 export default function ClientsScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [query, setQuery] = useState('');
   const [clients, setClients] = useState<ClientRow[]>([]);
 

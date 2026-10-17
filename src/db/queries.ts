@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { Db } from './types';
 import { DEFAULT_SETTINGS } from './schema';
 
 export type Status = 'planned' | 'done' | 'no_show' | 'cancelled';
@@ -51,14 +51,14 @@ export type Settings = typeof DEFAULT_SETTINGS;
 
 // ---------- Настройки ----------
 
-export async function getSettings(db: SQLiteDatabase): Promise<Settings> {
+export async function getSettings(db: Db): Promise<Settings> {
   const rows = await db.getAllAsync<{ key: string; value: string }>('SELECT key, value FROM settings');
   const s: Settings = { ...DEFAULT_SETTINGS };
   for (const r of rows) s[r.key] = r.value;
   return s;
 }
 
-export async function saveSettings(db: SQLiteDatabase, values: Partial<Settings>) {
+export async function saveSettings(db: Db, values: Partial<Settings>) {
   await db.withTransactionAsync(async () => {
     for (const [k, v] of Object.entries(values)) {
       if (v === undefined) continue;
@@ -69,17 +69,17 @@ export async function saveSettings(db: SQLiteDatabase, values: Partial<Settings>
 
 // ---------- Услуги ----------
 
-export function listServices(db: SQLiteDatabase, includeArchived = false) {
+export function listServices(db: Db, includeArchived = false) {
   return db.getAllAsync<Service>(
     `SELECT * FROM services ${includeArchived ? '' : 'WHERE archived = 0'} ORDER BY archived, sort, id`,
   );
 }
 
-export function getService(db: SQLiteDatabase, id: number) {
+export function getService(db: Db, id: number) {
   return db.getFirstAsync<Service>('SELECT * FROM services WHERE id = ?', id);
 }
 
-export async function saveService(db: SQLiteDatabase, s: Omit<Service, 'id' | 'sort' | 'archived'> & { id?: number; archived?: number }) {
+export async function saveService(db: Db, s: Omit<Service, 'id' | 'sort' | 'archived'> & { id?: number; archived?: number }) {
   if (s.id) {
     await db.runAsync(
       'UPDATE services SET name = ?, description = ?, duration = ?, price = ?, archived = ? WHERE id = ?',
@@ -105,7 +105,7 @@ const CLIENT_STATS = `
     (SELECT MIN(date) FROM appointments a WHERE a.client_id = c.id AND a.status = 'planned' AND a.date >= ?) AS next_visit
   FROM clients c`;
 
-export function listClients(db: SQLiteDatabase, today: string, query = '') {
+export function listClients(db: Db, today: string, query = '') {
   const q = `%${query.trim().toLowerCase()}%`;
   return db.getAllAsync<ClientRow>(
     `${CLIENT_STATS} WHERE lower(c.name) LIKE ? OR c.phone LIKE ? OR lower(c.telegram) LIKE ? ORDER BY c.name COLLATE NOCASE`,
@@ -113,11 +113,11 @@ export function listClients(db: SQLiteDatabase, today: string, query = '') {
   );
 }
 
-export function getClient(db: SQLiteDatabase, id: number, today: string) {
+export function getClient(db: Db, id: number, today: string) {
   return db.getFirstAsync<ClientRow>(`${CLIENT_STATS} WHERE c.id = ?`, today, id);
 }
 
-export async function saveClient(db: SQLiteDatabase, c: { id?: number; name: string; phone: string; telegram: string; notes: string }) {
+export async function saveClient(db: Db, c: { id?: number; name: string; phone: string; telegram: string; notes: string }) {
   const tg = c.telegram.trim().replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '');
   if (c.id) {
     await db.runAsync('UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ? WHERE id = ?', c.name.trim(), c.phone.trim(), tg, c.notes, c.id);
@@ -130,7 +130,7 @@ export async function saveClient(db: SQLiteDatabase, c: { id?: number; name: str
   return r.lastInsertRowId;
 }
 
-export async function deleteClient(db: SQLiteDatabase, id: number) {
+export async function deleteClient(db: Db, id: number) {
   await db.runAsync('DELETE FROM clients WHERE id = ?', id);
 }
 
@@ -141,28 +141,28 @@ const APPT_SELECT = `
     (SELECT GROUP_CONCAT(name, ', ') FROM appointment_services s WHERE s.appointment_id = a.id) AS services_label
   FROM appointments a LEFT JOIN clients c ON c.id = a.client_id`;
 
-export function listAppointmentsByDate(db: SQLiteDatabase, date: string) {
+export function listAppointmentsByDate(db: Db, date: string) {
   return db.getAllAsync<Appointment>(`${APPT_SELECT} WHERE a.date = ? ORDER BY a.start`, date);
 }
 
-export function listAppointmentsBetween(db: SQLiteDatabase, from: string, to: string) {
+export function listAppointmentsBetween(db: Db, from: string, to: string) {
   return db.getAllAsync<Appointment>(`${APPT_SELECT} WHERE a.date >= ? AND a.date <= ? ORDER BY a.date, a.start`, from, to);
 }
 
-export function listClientAppointments(db: SQLiteDatabase, clientId: number) {
+export function listClientAppointments(db: Db, clientId: number) {
   return db.getAllAsync<Appointment>(`${APPT_SELECT} WHERE a.client_id = ? ORDER BY a.date DESC, a.start DESC`, clientId);
 }
 
-export function getAppointment(db: SQLiteDatabase, id: number) {
+export function getAppointment(db: Db, id: number) {
   return db.getFirstAsync<Appointment>(`${APPT_SELECT} WHERE a.id = ?`, id);
 }
 
-export function getAppointmentServices(db: SQLiteDatabase, id: number) {
+export function getAppointmentServices(db: Db, id: number) {
   return db.getAllAsync<ApptService>('SELECT service_id, name, price, duration FROM appointment_services WHERE appointment_id = ?', id);
 }
 
 /** Дни, в которых есть активные записи (для точек в календаре) */
-export async function busyDays(db: SQLiteDatabase, from: string, to: string) {
+export async function busyDays(db: Db, from: string, to: string) {
   const rows = await db.getAllAsync<{ date: string; n: number }>(
     "SELECT date, COUNT(*) AS n FROM appointments WHERE date >= ? AND date <= ? AND status != 'cancelled' GROUP BY date",
     from, to,
@@ -171,7 +171,7 @@ export async function busyDays(db: SQLiteDatabase, from: string, to: string) {
 }
 
 /** Записи, пересекающиеся с интервалом (кроме отменённых и самой редактируемой) */
-export function findConflicts(db: SQLiteDatabase, date: string, start: number, duration: number, excludeId?: number) {
+export function findConflicts(db: Db, date: string, start: number, duration: number, excludeId?: number) {
   return db.getAllAsync<Appointment>(
     `${APPT_SELECT} WHERE a.date = ? AND a.status != 'cancelled' AND a.id != ? AND a.start < ? AND a.start + a.duration > ? ORDER BY a.start`,
     date, excludeId ?? -1, start + duration, start,
@@ -179,11 +179,13 @@ export function findConflicts(db: SQLiteDatabase, date: string, start: number, d
 }
 
 export async function saveAppointment(
-  db: SQLiteDatabase,
+  db: Db,
   a: { id?: number; client_id: number | null; date: string; start: number; duration: number; price: number; notes: string; services: ApptService[] },
 ) {
   let id = a.id;
-  await db.withExclusiveTransactionAsync(async (tx) => {
+  // withExclusiveTransactionAsync не поддерживается на вебе
+  await db.withTransactionAsync(async () => {
+    const tx = db;
     if (id) {
       await tx.runAsync(
         'UPDATE appointments SET client_id = ?, date = ?, start = ?, duration = ?, price = ?, notes = ? WHERE id = ?',
@@ -207,11 +209,11 @@ export async function saveAppointment(
   return id!;
 }
 
-export async function setAppointmentStatus(db: SQLiteDatabase, id: number, status: Status) {
+export async function setAppointmentStatus(db: Db, id: number, status: Status) {
   await db.runAsync('UPDATE appointments SET status = ? WHERE id = ?', status, id);
 }
 
-export async function deleteAppointment(db: SQLiteDatabase, id: number) {
+export async function deleteAppointment(db: Db, id: number) {
   await db.runAsync('DELETE FROM appointments WHERE id = ?', id);
 }
 
@@ -228,7 +230,7 @@ export type FinanceSummary = {
   newClients: number;
 };
 
-export async function financeSummary(db: SQLiteDatabase, from: string, to: string): Promise<FinanceSummary> {
+export async function financeSummary(db: Db, from: string, to: string): Promise<FinanceSummary> {
   const done = await db.getFirstAsync<{ s: number; n: number }>(
     "SELECT COALESCE(SUM(price),0) AS s, COUNT(*) AS n FROM appointments WHERE status='done' AND date BETWEEN ? AND ?", from, to);
   const planned = await db.getFirstAsync<{ s: number; n: number }>(
@@ -258,7 +260,7 @@ export async function financeSummary(db: SQLiteDatabase, from: string, to: strin
 
 // ---------- Резервная копия ----------
 
-export async function exportAll(db: SQLiteDatabase) {
+export async function exportAll(db: Db) {
   return {
     app: 'lenchi-studio',
     version: 1,

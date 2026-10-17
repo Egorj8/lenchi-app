@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar, Button, Chip, Field, SectionTitle, success, tap, styles as ui } from '@/components/ui';
 import {
   findConflicts,
@@ -22,11 +22,12 @@ import {
 import { colors, radius, space } from '@/theme';
 import { fmtDuration, fmtTime, fromKey, parseTime, range, todayKey, weekday, weekdayShort, fmtDayLong } from '@/utils/date';
 import { money, workDays } from '@/utils/messages';
+import { showAlert } from '@/utils/dialog';
 
 const STEP = 15;
 
 export default function AppointmentEdit() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const params = useLocalSearchParams<{ id?: string; date?: string; start?: string; clientId?: string }>();
   const editId = params.id ? Number(params.id) : undefined;
 
@@ -122,13 +123,13 @@ export default function AppointmentEdit() {
   const toggleService = (id: number) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   async function save(force = false) {
-    if (start === null) return Alert.alert('Выберите время', 'Нажмите на свободное время в списке.');
-    if (newClient && !newName.trim()) return Alert.alert('Имя клиентки', 'Введите имя или выберите клиентку из списка.');
+    if (start === null) return showAlert('Выберите время', 'Нажмите на свободное время в списке.');
+    if (newClient && !newName.trim()) return showAlert('Имя клиентки', 'Введите имя или выберите клиентку из списка.');
     if (!force) {
       const conflicts = await findConflicts(db, date, start, duration, editId);
       if (conflicts.length) {
         const c = conflicts[0];
-        return Alert.alert(
+        return showAlert(
           'Время занято',
           `Пересекается с записью ${fmtTime(c.start)}–${fmtTime(c.start + c.duration)}${c.client_name ? ` (${c.client_name})` : ''}.`,
           [

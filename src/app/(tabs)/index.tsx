@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,7 +15,7 @@ const STRIP_DAYS = 60;
 type Item = { kind: 'appt'; a: Appointment } | { kind: 'gap'; from: number; to: number };
 
 export default function CalendarScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [selected, setSelected] = useState(todayKey());
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [dots, setDots] = useState<Record<string, number>>({});

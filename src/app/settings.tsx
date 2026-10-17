@@ -1,12 +1,13 @@
 import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Chip, Field, SectionTitle, success } from '@/components/ui';
 import { getSettings, saveSettings, type Settings } from '@/db/queries';
 import { DEFAULT_SETTINGS } from '@/db/schema';
 import { colors, space } from '@/theme';
 import { parseTime } from '@/utils/date';
+import { showAlert } from '@/utils/dialog';
 
 const WEEK = [
   [1, 'Пн'], [2, 'Вт'], [3, 'Ср'], [4, 'Чт'], [5, 'Пт'], [6, 'Сб'], [0, 'Вс'],
@@ -14,7 +15,7 @@ const WEEK = [
 const CURRENCIES = ['₺', '₽', '$', '€'];
 
 export default function SettingsScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [s, setS] = useState<Settings | null>(null);
 
   useFocusEffect(useCallback(() => { getSettings(db).then(setS); }, [db]));
@@ -30,8 +31,8 @@ export default function SettingsScreen() {
   const save = async () => {
     const ws = parseTime(s.work_start);
     const we = parseTime(s.work_end);
-    if (ws === null || we === null || we <= ws) return Alert.alert('Проверьте рабочие часы', 'Формат ЧЧ:ММ, конец позже начала.');
-    if (!Number(s.slot_length)) return Alert.alert('Укажите длину окошка в минутах');
+    if (ws === null || we === null || we <= ws) return showAlert('Проверьте рабочие часы', 'Формат ЧЧ:ММ, конец позже начала.');
+    if (!Number(s.slot_length)) return showAlert('Укажите длину окошка в минутах');
     await saveSettings(db, s);
     success();
     router.back();

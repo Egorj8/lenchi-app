@@ -1,15 +1,16 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { Button, Chip, Field, SectionTitle, success } from '@/components/ui';
 import { getService, getSettings, saveService } from '@/db/queries';
 import { colors, space } from '@/theme';
+import { showAlert } from '@/utils/dialog';
 
 const DURATIONS = [30, 60, 70, 90, 120, 150, 180];
 
 export default function ServiceEdit() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editId = id ? Number(id) : undefined;
   const [name, setName] = useState('');
@@ -35,9 +36,9 @@ export default function ServiceEdit() {
   const save = async (archivedValue = archived) => {
     const d = Number(duration);
     const p = Number(price.replace(',', '.'));
-    if (!name.trim()) return Alert.alert('Введите название');
-    if (!d || d < 5) return Alert.alert('Укажите длительность в минутах');
-    if (Number.isNaN(p)) return Alert.alert('Укажите цену');
+    if (!name.trim()) return showAlert('Введите название');
+    if (!d || d < 5) return showAlert('Укажите длительность в минутах');
+    if (Number.isNaN(p)) return showAlert('Укажите цену');
     await saveService(db, { id: editId, name: name.trim(), description: description.trim(), duration: d, price: p, archived: archivedValue });
     success();
     router.back();

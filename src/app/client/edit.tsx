@@ -1,14 +1,15 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Button, Field, success } from '@/components/ui';
 import { deleteClient, getClient, saveClient } from '@/db/queries';
 import { colors, space } from '@/theme';
 import { todayKey } from '@/utils/date';
+import { showAlert } from '@/utils/dialog';
 
 export default function ClientEdit() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editId = id ? Number(id) : undefined;
   const [name, setName] = useState('');
@@ -29,7 +30,7 @@ export default function ClientEdit() {
   }, [db, editId]);
 
   const save = async () => {
-    if (!name.trim()) return Alert.alert('Введите имя');
+    if (!name.trim()) return showAlert('Введите имя');
     setSaving(true);
     try {
       const newId = await saveClient(db, { id: editId, name, phone, telegram, notes });
@@ -42,7 +43,7 @@ export default function ClientEdit() {
   };
 
   const remove = () =>
-    Alert.alert('Удалить клиентку?', 'Её записи останутся в календаре, но без имени.', [
+    showAlert('Удалить клиентку?', 'Её записи останутся в календаре, но без имени.', [
       { text: 'Отмена', style: 'cancel' },
       {
         text: 'Удалить',

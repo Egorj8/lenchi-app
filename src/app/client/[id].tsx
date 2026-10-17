@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActionCircle, Avatar, Badge, Button, Card, Empty, GradientText, IconButton, SectionTitle } from '@/components/ui';
@@ -10,7 +10,7 @@ import { fmtDayLong, fmtDayShort, fmtTime, todayKey } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp } from '@/utils/messages';
 
 export default function ClientScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [c, setC] = useState<ClientRow | null | undefined>(undefined);
   const [history, setHistory] = useState<Appointment[]>([]);

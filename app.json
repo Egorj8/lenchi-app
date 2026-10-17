@@ -21,7 +21,12 @@
       "package": "com.lenchi.studio"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "name": "Lenchi Studio",
+      "shortName": "Lenchi",
+      "themeColor": "#1a1b1e",
+      "backgroundColor": "#1a1b1e"
     },
     "plugins": [
       "expo-router",

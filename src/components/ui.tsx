@@ -307,7 +307,7 @@ export const styles = StyleSheet.create({
   },
   titleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: space.md, marginBottom: space.lg },
   title: { fontSize: 32, fontWeight: '800', letterSpacing: -0.5, color: colors.text },
-  subtitle: { color: colors.muted, fontSize: 14, marginBottom: 2, textTransform: 'capitalize' },
+  subtitle: { color: colors.muted, fontSize: 14, marginBottom: 2 },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,

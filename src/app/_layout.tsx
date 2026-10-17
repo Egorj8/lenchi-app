@@ -1,8 +1,8 @@
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
-import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { Suspense } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { DbProvider } from '@/db/provider';
 import { migrateDbIfNeeded } from '@/db/schema';
 import { colors } from '@/theme';
 
@@ -31,7 +31,7 @@ export default function RootLayout() {
     <ThemeProvider value={navTheme}>
       <StatusBar style="light" />
       <Suspense fallback={<Loading />}>
-        <SQLiteProvider databaseName="lenchi.db" onInit={migrateDbIfNeeded} useSuspense>
+        <DbProvider onInit={migrateDbIfNeeded}>
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: colors.bg },
@@ -52,7 +52,7 @@ export default function RootLayout() {
             <Stack.Screen name="slots" options={{ title: 'Свободные окошки' }} />
             <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
           </Stack>
-        </SQLiteProvider>
+        </DbProvider>
       </Suspense>
     </ThemeProvider>
   );

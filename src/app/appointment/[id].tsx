@@ -1,8 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ActionCircle, Avatar, Badge, Button, Card, Empty, IconButton, SectionTitle, success, tap } from '@/components/ui';
 import {
   deleteAppointment,
@@ -18,9 +18,10 @@ import {
 import { colors, radius, space, statusMeta } from '@/theme';
 import { fmtDayLong, fmtDuration, fmtTime, relativeDay } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp, reminderText } from '@/utils/messages';
+import { showAlert } from '@/utils/dialog';
 
 export default function AppointmentScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [a, setA] = useState<Appointment | null | undefined>(undefined);
   const [services, setServices] = useState<ApptService[]>([]);
@@ -49,7 +50,7 @@ export default function AppointmentScreen() {
   };
 
   const remove = () =>
-    Alert.alert('Удалить запись?', 'Запись исчезнет из календаря и статистики.', [
+    showAlert('Удалить запись?', 'Запись исчезнет из календаря и статистики.', [
       { text: 'Отмена', style: 'cancel' },
       {
         text: 'Удалить',
@@ -168,7 +169,7 @@ export default function AppointmentScreen() {
 const s = StyleSheet.create({
   content: { padding: space.lg, paddingTop: 0 },
   hero: { marginBottom: space.lg },
-  date: { color: colors.muted, fontSize: 15, textTransform: 'capitalize' },
+  date: { color: colors.muted, fontSize: 15 },
   time: { color: colors.text, fontSize: 34, fontWeight: '800', letterSpacing: -0.5, marginTop: 2 },
   muted: { color: colors.muted, fontSize: 14 },
   client: { flexDirection: 'row', alignItems: 'center', gap: 12 },

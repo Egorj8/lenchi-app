@@ -1,20 +1,21 @@
 import { router } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { useDb } from '@/db/provider';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Row, ScreenTitle, SectionTitle } from '@/components/ui';
 import { exportAll } from '@/db/queries';
 import { colors, space } from '@/theme';
+import { showAlert } from '@/utils/dialog';
 
 export default function MoreScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
 
   const backup = async () => {
     try {
       const data = await exportAll(db);
       await Share.share({ title: 'Резервная копия Lenchi Studio', message: JSON.stringify(data) });
     } catch (e) {
-      Alert.alert('Не удалось сделать копию', String(e));
+      showAlert('Не удалось сделать копию', String(e));
     }
   };
 

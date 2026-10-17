@@ -1,4 +1,4 @@
-import type { SQLiteDatabase } from 'expo-sqlite';
+import type { Db } from './types';
 
 const DATABASE_VERSION = 1;
 
@@ -30,7 +30,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   slots_footer: 'Если не подошло ничего, пишите в личку, что-нибудь придумаем 😉',
 };
 
-export async function migrateDbIfNeeded(db: SQLiteDatabase) {
+export async function migrateDbIfNeeded(db: Db) {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const current = row?.user_version ?? 0;

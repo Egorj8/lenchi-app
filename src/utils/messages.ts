@@ -1,7 +1,8 @@
 import * as Clipboard from 'expo-clipboard';
-import { Alert, Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type { Appointment, Settings } from '@/db/queries';
 import { fmtDayLong, fmtTime, parseTime, weekday, addDays, nowMinutes, todayKey } from './date';
+import { showAlert } from '@/utils/dialog';
 
 export const digits = (phone: string) => phone.replace(/\D/g, '');
 
@@ -35,19 +36,21 @@ async function open(url: string, fallback?: string) {
         return;
       } catch {}
     }
-    Alert.alert('Не получилось открыть', 'Проверьте, что приложение установлено.');
+    showAlert('Не получилось открыть', 'Проверьте, что приложение установлено.');
   }
 }
 
 export function call(phone: string) {
-  if (!digits(phone)) return Alert.alert('Нет телефона', 'Добавьте номер в карточку клиента.');
+  if (!digits(phone)) return showAlert('Нет телефона', 'Добавьте номер в карточку клиента.');
   open(`tel:${phone.replace(/[^\d+]/g, '')}`);
 }
 
 export function openWhatsApp(phone: string, text = '') {
   const d = digits(phone);
-  if (!d) return Alert.alert('Нет телефона', 'Добавьте номер в карточку клиента.');
+  if (!d) return showAlert('Нет телефона', 'Добавьте номер в карточку клиента.');
   const q = text ? `?text=${encodeURIComponent(text)}` : '';
+  // в браузере схема whatsapp:// не срабатывает и не выдаёт ошибку
+  if (Platform.OS === 'web') return open(`https://wa.me/${d}${q}`);
   open(`whatsapp://send?phone=${d}${text ? `&text=${encodeURIComponent(text)}` : ''}`, `https://wa.me/${d}${q}`);
 }
 
@@ -58,11 +61,13 @@ export function openWhatsApp(phone: string, text = '') {
 export async function openTelegram(username: string, phone: string, text = '') {
   const u = username.trim().replace(/^@/, '');
   const d = digits(phone);
-  if (!u && !d) return Alert.alert('Нет контакта', 'Добавьте Telegram или телефон в карточку клиента.');
+  if (!u && !d) return showAlert('Нет контакта', 'Добавьте Telegram или телефон в карточку клиента.');
   if (text) await Clipboard.setStringAsync(text);
   const url = u ? `https://t.me/${u}` : `https://t.me/+${d}`;
+  // на вебе открываем сразу, пока действует нажатие пользователя, иначе Safari заблокирует окно
+  if (Platform.OS === 'web') return open(url);
   if (text) {
-    Alert.alert('Текст скопирован', 'Откроется чат в Telegram. Вставьте сообщение долгим нажатием на поле ввода.', [
+    showAlert('Текст скопирован', 'Откроется чат в Telegram. Вставьте сообщение долгим нажатием на поле ввода.', [
       { text: 'Открыть Telegram', onPress: () => open(url) },
     ]);
   } else {

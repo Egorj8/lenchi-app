@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Card, Fab } from '@/components/ui';
@@ -10,7 +10,7 @@ import { fmtDuration } from '@/utils/date';
 import { money } from '@/utils/messages';
 
 export default function ServicesScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [services, setServices] = useState<Service[]>([]);
   const [cur, setCur] = useState('₺');
 

@@ -1,18 +1,19 @@
 import * as Clipboard from 'expo-clipboard';
 import { useFocusEffect } from 'expo-router';
-import { useSQLiteContext } from 'expo-sqlite';
+import { useDb } from '@/db/provider';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Chip, SectionTitle, success } from '@/components/ui';
 import { getSettings, listAppointmentsBetween, type Appointment, type Settings } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { addDays, fmtDayLong, fmtTime, todayKey } from '@/utils/date';
 import { computeFreeSlots, slotsPost, type DaySlots } from '@/utils/messages';
+import { showAlert } from '@/utils/dialog';
 
 const PERIODS = [7, 14, 21];
 
 export default function SlotsScreen() {
-  const db = useSQLiteContext();
+  const db = useDb();
   const [days, setDays] = useState(14);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [appts, setAppts] = useState<Appointment[]>([]);
@@ -46,7 +47,7 @@ export default function SlotsScreen() {
   const copy = async () => {
     await Clipboard.setStringAsync(text);
     success();
-    Alert.alert('Скопировано', 'Откройте канал в Telegram и вставьте пост.');
+    showAlert('Скопировано', 'Откройте канал в Telegram и вставьте пост.');
   };
 
   return (
@@ -102,7 +103,7 @@ const s = StyleSheet.create({
   muted: { color: colors.muted, fontSize: 14 },
   row: { flexDirection: 'row', gap: 8, marginBottom: space.lg },
   day: { marginBottom: space.lg },
-  dayTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 8, textTransform: 'capitalize' },
+  dayTitle: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 8 },
   times: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   preview: {
     padding: space.lg, borderRadius: radius.lg, marginBottom: space.lg,
