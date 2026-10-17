@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Lenchi Studio",
+    "slug": "lenchi-studio",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.lenchi.studio"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1a1b1e",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.lenchi.studio"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "scheme": "lenchi",
+    "backgroundColor": "#1a1b1e"
+  }
+}

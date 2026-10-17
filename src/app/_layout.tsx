@@ -1,0 +1,59 @@
+import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { SQLiteProvider } from 'expo-sqlite';
+import { StatusBar } from 'expo-status-bar';
+import { Suspense } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { migrateDbIfNeeded } from '@/db/schema';
+import { colors } from '@/theme';
+
+const navTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.bg,
+    card: colors.bg,
+    text: colors.text,
+    border: colors.border,
+    primary: colors.yellow,
+  },
+};
+
+function Loading() {
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' }}>
+      <ActivityIndicator color={colors.yellow} size="large" />
+    </View>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider value={navTheme}>
+      <StatusBar style="light" />
+      <Suspense fallback={<Loading />}>
+        <SQLiteProvider databaseName="lenchi.db" onInit={migrateDbIfNeeded} useSuspense>
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.yellow,
+              headerTitleStyle: { color: colors.text, fontWeight: '700' },
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: colors.bg },
+              headerBackButtonDisplayMode: 'minimal',
+            }}
+          >
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="appointment/edit" options={{ presentation: 'modal', title: 'Запись' }} />
+            <Stack.Screen name="appointment/[id]" options={{ title: 'Запись' }} />
+            <Stack.Screen name="client/edit" options={{ presentation: 'modal', title: 'Клиент' }} />
+            <Stack.Screen name="client/[id]" options={{ title: 'Клиент' }} />
+            <Stack.Screen name="services" options={{ title: 'Услуги и цены' }} />
+            <Stack.Screen name="service-edit" options={{ presentation: 'modal', title: 'Услуга' }} />
+            <Stack.Screen name="slots" options={{ title: 'Свободные окошки' }} />
+            <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
+          </Stack>
+        </SQLiteProvider>
+      </Suspense>
+    </ThemeProvider>
+  );
+}
