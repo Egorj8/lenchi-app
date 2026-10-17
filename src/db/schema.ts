@@ -1,7 +1,7 @@
 import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 
-const DATABASE_VERSION = 3;
+const DATABASE_VERSION = 4;
 
 // Прайс Елены со страницы записи в ГномГуру
 const SEED_SERVICES: [string, string, number, number][] = [
@@ -40,6 +40,8 @@ async function createViews(db: Db) {
     DROP VIEW IF EXISTS live_appointments;
     CREATE VIEW live_clients AS SELECT * FROM clients WHERE deleted_at IS NULL;
     CREATE VIEW live_appointments AS SELECT * FROM appointments WHERE deleted_at IS NULL;
+    DROP VIEW IF EXISTS live_events;
+    CREATE VIEW live_events AS SELECT * FROM events WHERE deleted_at IS NULL;
   `);
 }
 
@@ -135,6 +137,29 @@ export async function migrateDbIfNeeded(db: Db) {
       ALTER TABLE appointments ADD COLUMN deleted_at INTEGER;
     `);
   }
+  if (current < 4) {
+    // v4: личные дела мастера (магазин, пробежка…) — планировщик рядом с записями
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'personal',
+        date TEXT NOT NULL,
+        start INTEGER NOT NULL DEFAULT 0,
+        duration INTEGER NOT NULL DEFAULT 60,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        repeat TEXT NOT NULL DEFAULT 'none',
+        repeat_until TEXT,
+        busy INTEGER NOT NULL DEFAULT 1,
+        done INTEGER NOT NULL DEFAULT 0,
+        notes TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        deleted_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+    `);
+  }
+
   // Представления без удалённого. SELECT * фиксирует столбцы при создании,
   // поэтому пересоздаём их при каждой миграции схемы.
   await createViews(db);

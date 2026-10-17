@@ -11,6 +11,7 @@ import {
   getAppointmentServices,
   getSettings,
   listAppointmentsByDate,
+  listEventsBetween,
   listClients,
   listServices,
   saveAppointment,
@@ -24,6 +25,7 @@ import { colors, radius, space } from '@/theme';
 import { fmtDuration, fmtTime, fromKey, parseTime, range, todayKey, weekday, weekdayShort, fmtDayLong } from '@/utils/date';
 import { money, workDays } from '@/utils/messages';
 import { pickContact } from '@/utils/contacts';
+import { busyIntervals, expandEvents } from '@/utils/personal';
 import { formatPhone } from '@/utils/phone';
 import { showAlert } from '@/utils/dialog';
 
@@ -42,6 +44,7 @@ export default function AppointmentEdit() {
   const [services, setServices] = useState<Service[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [dayAppts, setDayAppts] = useState<Appointment[]>([]);
+  const [dayBusy, setDayBusy] = useState<{ start: number; end: number; title: string }[]>([]);
 
   const [clientId, setClientId] = useState<number | null>(params.clientId ? Number(params.clientId) : null);
   const [clientQuery, setClientQuery] = useState('');
@@ -87,6 +90,7 @@ export default function AppointmentEdit() {
 
   useEffect(() => {
     listAppointmentsByDate(db, date).then(setDayAppts);
+    listEventsBetween(db, date, date).then((ev) => setDayBusy(busyIntervals(expandEvents(ev, date, date), date)));
   }, [db, date]);
 
   const activeServices = services.filter((s) => !s.archived || picked.includes(s.id));
@@ -117,15 +121,18 @@ export default function AppointmentEdit() {
     // час до и после рабочего дня — чтобы можно было записать вне графика
     const ws = Math.max(0, (parseTime(settings.work_start) ?? 600) - 60);
     const we = Math.min(1440, (parseTime(settings.work_end) ?? 1140) + 60);
-    const busy = dayAppts.filter((a) => a.status !== 'cancelled' && a.id !== editId);
+    const busy = [
+      ...dayAppts.filter((a) => a.status !== 'cancelled' && a.id !== editId).map((a) => ({ start: a.start, end: a.start + a.duration })),
+      ...dayBusy,
+    ];
     const out: { t: number; free: boolean }[] = [];
     for (let t = ws; t + STEP <= we; t += STEP) {
-      const free = !busy.some((a) => a.start < t + duration && a.start + a.duration > t);
+      const free = !busy.some((b) => b.start < t + duration && b.end > t);
       out.push({ t, free });
     }
     if (start !== null && !out.some((x) => x.t === start)) out.push({ t: start, free: true });
     return out.sort((a, b) => a.t - b.t);
-  }, [settings, dayAppts, duration, editId, start]);
+  }, [settings, dayAppts, dayBusy, duration, editId, start]);
 
   const filteredClients = clients.filter((c) => {
     const q = clientQuery.trim().toLowerCase();
@@ -171,6 +178,19 @@ export default function AppointmentEdit() {
     if (start === null) return showAlert('Выберите время', 'Нажмите на свободное время в списке.');
     if (newClient && !newName.trim()) return showAlert('Имя клиентки', 'Введите имя или выберите клиентку из списка.');
     if (!force) {
+      const eventClash = dayBusy.find((b) => b.start < start + duration && b.end > start);
+      if (eventClash) {
+        return showAlert(
+          'Время занято личным делом',
+          eventClash.start === 0 && eventClash.end >= 1440
+            ? `В этот день у вас «${eventClash.title}» на весь день.`
+            : `Пересекается с «${eventClash.title}» ${fmtTime(eventClash.start)}–${fmtTime(eventClash.end)}.`,
+          [
+            { text: 'Изменить время', style: 'cancel' },
+            { text: 'Всё равно сохранить', style: 'destructive', onPress: () => save(true) },
+          ],
+        );
+      }
       const conflicts = await findConflicts(db, date, start, duration, editId);
       if (conflicts.length) {
         const c = conflicts[0];

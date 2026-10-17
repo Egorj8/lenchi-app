@@ -35,17 +35,17 @@ export function sameMonth(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
 
-type Span = { id: number; start: number; duration: number };
+type Span = { id: number | string; start: number; duration: number };
 export type Lane = { lane: number; lanes: number };
 
 /**
  * Раскладывает пересекающиеся записи по колонкам, как в Google Календаре.
  * Записи, связанные цепочкой пересечений, образуют группу и делят ширину поровну.
  */
-export function layoutLanes(items: Span[]): Map<number, Lane> {
+export function layoutLanes(items: Span[]): Map<number | string, Lane> {
   const sorted = [...items].sort((a, b) => a.start - b.start || b.duration - a.duration);
-  const result = new Map<number, Lane>();
-  let group: { id: number; lane: number }[] = [];
+  const result = new Map<number | string, Lane>();
+  let group: { id: number | string; lane: number }[] = [];
   let laneEnds: number[] = [];
   let groupEnd = -1;
 

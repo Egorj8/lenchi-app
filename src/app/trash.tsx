@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Avatar, Card, Chip, Empty, success, tap } from '@/components/ui';
+import { Avatar, Card, Chip, Empty, success, tap, type IconName } from '@/components/ui';
 import { useToast } from '@/components/Toast';
 import { useDb } from '@/db/provider';
 import {
@@ -10,10 +10,14 @@ import {
   getSettings,
   listTrashAppointments,
   listTrashClients,
+  listTrashEvents,
   purgeAppointment,
   purgeClient,
+  purgeEvent,
   restoreAppointment,
   restoreClient,
+  restoreEvent,
+  type PersonalEvent,
   TRASH_DAYS,
   type TrashAppointment,
   type TrashClient,
@@ -23,8 +27,9 @@ import { fmtDayShort, fmtTime, plural } from '@/utils/date';
 import { showAlert } from '@/utils/dialog';
 import { money } from '@/utils/messages';
 import { formatPhone } from '@/utils/phone';
+import { category } from '@/utils/personal';
 
-type Tab = 'appts' | 'clients';
+type Tab = 'appts' | 'clients' | 'events';
 
 function daysLeft(deletedAt: number) {
   const left = TRASH_DAYS - Math.floor((Date.now() - deletedAt) / 86_400_000);
@@ -37,24 +42,27 @@ export default function TrashScreen() {
   const [tab, setTab] = useState<Tab>('appts');
   const [appts, setAppts] = useState<TrashAppointment[]>([]);
   const [clients, setClients] = useState<TrashClient[]>([]);
+  const [events, setEvents] = useState<PersonalEvent[]>([]);
   const [cur, setCur] = useState('₺');
 
   const load = useCallback(async () => {
-    const [a, c, s] = await Promise.all([listTrashAppointments(db), listTrashClients(db), getSettings(db)]);
+    const [a, c, e, s] = await Promise.all([listTrashAppointments(db), listTrashClients(db), listTrashEvents(db), getSettings(db)]);
     setAppts(a);
     setClients(c);
+    setEvents(e);
     setCur(s.currency);
   }, [db]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const total = appts.length + clients.length;
+  const total = appts.length + clients.length + events.length;
 
   const restore = async (kind: Tab, id: number) => {
     if (kind === 'appts') await restoreAppointment(db, id);
-    else await restoreClient(db, id);
+    else if (kind === 'clients') await restoreClient(db, id);
+    else await restoreEvent(db, id);
     success();
-    toast({ message: kind === 'appts' ? 'Запись возвращена' : 'Клиентка возвращена', icon: 'arrow-undo' });
+    toast({ message: kind === 'appts' ? 'Запись возвращена' : kind === 'clients' ? 'Клиентка возвращена' : 'Дело возвращено', icon: 'arrow-undo' });
     load();
   };
 
@@ -66,7 +74,8 @@ export default function TrashScreen() {
         style: 'destructive',
         onPress: async () => {
           if (kind === 'appts') await purgeAppointment(db, id);
-          else await purgeClient(db, id);
+          else if (kind === 'clients') await purgeClient(db, id);
+          else await purgeEvent(db, id);
           load();
         },
       },
@@ -95,6 +104,7 @@ export default function TrashScreen() {
       <View style={s.tabs}>
         <Chip label={`Записи · ${appts.length}`} selected={tab === 'appts'} onPress={() => setTab('appts')} />
         <Chip label={`Клиентки · ${clients.length}`} selected={tab === 'clients'} onPress={() => setTab('clients')} />
+        <Chip label={`Дела · ${events.length}`} selected={tab === 'events'} onPress={() => setTab('events')} />
       </View>
 
       {tab === 'appts' ? (
@@ -111,6 +121,29 @@ export default function TrashScreen() {
               <Actions onRestore={() => restore('appts', a.id)} onPurge={() => purge('appts', a.id)} />
             </Card>
           ))
+        )
+      ) : tab === 'events' ? (
+        events.length === 0 ? (
+          <Empty icon="trash-outline" title="Удалённых дел нет" />
+        ) : (
+          events.map((e) => {
+            const c = category(e.category);
+            return (
+              <Card key={e.id} style={s.row}>
+                <View style={[s.evIcon, { backgroundColor: c.color + '22' }]}>
+                  <Ionicons name={c.icon as IconName} size={20} color={c.color} />
+                </View>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={s.title}>{e.title}</Text>
+                  <Text style={s.sub}>
+                    {fmtDayShort(e.date)}{e.all_day ? ' · весь день' : ` · ${fmtTime(e.start)}`}{e.repeat !== 'none' ? ' · повтор' : ''}
+                  </Text>
+                  <Text style={s.left}>Удалится через {daysLeft(e.deleted_at ?? Date.now())} дн.</Text>
+                </View>
+                <Actions onRestore={() => restore('events', e.id)} onPurge={() => purge('events', e.id)} />
+              </Card>
+            );
+          })
         )
       ) : clients.length === 0 ? (
         <Empty icon="trash-outline" title="Удалённых клиенток нет" />
@@ -159,4 +192,5 @@ const s = StyleSheet.create({
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   btnRestore: { backgroundColor: colors.yellow, borderColor: colors.yellow },
+  evIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });

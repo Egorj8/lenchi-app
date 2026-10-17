@@ -11,12 +11,14 @@ type Props = {
   selected: string;
   today: string;
   stats: Record<string, { n: number; sum: number }>;
+  /** число личных дел по дням — показываем голубой точкой */
+  eventDays?: Record<string, number>;
   workDays: number[];
   onPressDay: (date: string) => void;
 };
 
 /** Месяц сеткой: число записей в каждом дне, рабочие дни подсвечены */
-export function MonthView({ month, selected, today, stats, workDays, onPressDay }: Props) {
+export function MonthView({ month, selected, today, stats, eventDays = {}, workDays, onPressDay }: Props) {
   const days = monthGrid(month);
   const max = Math.max(1, ...Object.values(stats).map((s) => s.n));
   return (
@@ -52,13 +54,14 @@ export function MonthView({ month, selected, today, stats, workDays, onPressDay 
                 <Text style={[s.num, on && { color: colors.ink }, !work && !on && { color: colors.muted }]}>
                   {fromKey(d).getDate()}
                 </Text>
-                {st ? (
-                  <View style={[s.badge, on && { backgroundColor: colors.ink }]}>
-                    <Text style={[s.badgeText, on && { color: colors.yellow }]}>{st.n}</Text>
-                  </View>
-                ) : (
-                  <View style={{ height: 16 }} />
-                )}
+                <View style={s.marks}>
+                  {st ? (
+                    <View style={[s.badge, on && { backgroundColor: colors.ink }]}>
+                      <Text style={[s.badgeText, on && { color: colors.yellow }]}>{st.n}</Text>
+                    </View>
+                  ) : null}
+                  {eventDays[d] ? <View style={[s.eventDot, on && { backgroundColor: colors.ink }]} /> : null}
+                </View>
                 {/* полоска загрузки дня */}
                 {st ? (
                   <View style={s.loadTrack}>
@@ -89,6 +92,8 @@ const s = StyleSheet.create({
   today: { borderColor: colors.yellow },
   selected: { backgroundColor: colors.yellow, borderColor: colors.yellow },
   num: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  marks: { flexDirection: 'row', alignItems: 'center', gap: 3, height: 16 },
+  eventDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#7aa7ff' },
   badge: { minWidth: 18, height: 16, borderRadius: 8, paddingHorizontal: 4, backgroundColor: colors.yellow, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: colors.ink, fontSize: 10, fontWeight: '800' },
   loadTrack: { width: '60%', height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },

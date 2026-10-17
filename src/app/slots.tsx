@@ -4,7 +4,8 @@ import { useDb } from '@/db/provider';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Chip, SectionTitle, success } from '@/components/ui';
-import { getSettings, listAppointmentsBetween, type Appointment, type Settings } from '@/db/queries';
+import { getSettings, listAppointmentsBetween, listEventsBetween, type Appointment, type Settings } from '@/db/queries';
+import { busyIntervals, expandEvents, type EventOccurrence } from '@/utils/personal';
 import { colors, radius, space } from '@/theme';
 import { addDays, fmtDayLong, fmtTime, todayKey } from '@/utils/date';
 import { computeFreeSlots, slotsPost, type DaySlots } from '@/utils/messages';
@@ -17,19 +18,31 @@ export default function SlotsScreen() {
   const [days, setDays] = useState(14);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [appts, setAppts] = useState<Appointment[]>([]);
+  const [events, setEvents] = useState<EventOccurrence[]>([]);
   // время, которое мастер решил не публиковать: "дата|минуты"
   const [hidden, setHidden] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const t = todayKey();
-    const [s, a] = await Promise.all([getSettings(db), listAppointmentsBetween(db, t, addDays(t, 30))]);
+    const [s, a, ev] = await Promise.all([
+      getSettings(db),
+      listAppointmentsBetween(db, t, addDays(t, 30)),
+      listEventsBetween(db, t, addDays(t, 30)),
+    ]);
+    setEvents(expandEvents(ev, t, addDays(t, 30)));
     setSettings(s);
     setAppts(a);
   }, [db]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const slots = useMemo(() => (settings ? computeFreeSlots(settings, appts, todayKey(), days) : []), [settings, appts, days]);
+  const slots = useMemo(() => {
+    if (!settings) return [];
+    // личные дела, которые занимают время, тоже вычитаем из свободного
+    const extra: Record<string, { start: number; end: number }[]> = {};
+    for (const e of events) extra[e.occurrence] = busyIntervals(events, e.occurrence);
+    return computeFreeSlots(settings, appts, todayKey(), days, extra);
+  }, [settings, appts, events, days]);
   const visible: DaySlots[] = useMemo(
     () => slots.map((d) => ({ date: d.date, times: d.times.filter((t) => !hidden.has(`${d.date}|${t}`)) })).filter((d) => d.times.length),
     [slots, hidden],
@@ -53,7 +66,7 @@ export default function SlotsScreen() {
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={s.content}>
       <Text style={s.lead}>
-        Свободное время считается по рабочим дням и часам из настроек, с учётом уже созданных записей. Нажмите на время, чтобы убрать его из поста.
+        Свободное время считается по рабочим дням и часам из настроек, с учётом записей и личных дел, которые занимают время. Нажмите на время, чтобы убрать его из поста.
       </Text>
 
       <View style={s.row}>

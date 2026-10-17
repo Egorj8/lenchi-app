@@ -4,15 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MonthView } from '@/components/MonthView';
+import { NewChooser } from '@/components/NewChooser';
 import { TIMELINE_LABEL_W, Timeline } from '@/components/Timeline';
-import { Fab, IconButton, ScreenTitle, tap } from '@/components/ui';
+import { Fab, IconButton, ScreenTitle, tap, type IconName } from '@/components/ui';
 import { useDb } from '@/db/provider';
-import { busyDays, dayStats, getSettings, listAppointmentsBetween, type Appointment, type Settings } from '@/db/queries';
+import { busyDays, dayStats, getSettings, listAppointmentsBetween, listEventsBetween, type Appointment, type Settings } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { addMonths, monthGrid, sameMonth, weekDays } from '@/utils/calendar';
 import { addDays, fmtDayLong, fmtDayShort, fmtMonth, fromKey, nowMinutes, parseTime, plural, relativeDay, todayKey, weekday, weekdayShort } from '@/utils/date';
 import { money, workDays as getWorkDays } from '@/utils/messages';
 import { useDataChanged } from '@/utils/events';
+import { category, expandEvents, type EventOccurrence } from '@/utils/personal';
 
 type Mode = 'day' | 'week' | 'month';
 const MODES: [Mode, string][] = [['day', 'День'], ['week', 'Неделя'], ['month', 'Месяц']];
@@ -27,6 +29,8 @@ export default function CalendarScreen() {
   const [appts, setAppts] = useState<Appointment[]>([]);
   const [dots, setDots] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<Record<string, { n: number; sum: number }>>({});
+  const [events, setEvents] = useState<EventOccurrence[]>([]);
+  const [chooser, setChooser] = useState<{ date: string; start?: number } | null>(null);
 
   const week = useMemo(() => weekDays(selected), [selected]);
 
@@ -49,9 +53,11 @@ export default function CalendarScreen() {
   const load = useCallback(async () => {
     tick();
     setSettings(await getSettings(db));
+    // личные дела: берём весь видимый диапазон и разворачиваем повторы
+    const [rangeFrom, rangeTo] = mode === 'month' ? [monthGrid(selected)[0], monthGrid(selected)[41]] : [week[0], week[6]];
+    setEvents(expandEvents(await listEventsBetween(db, rangeFrom, rangeTo), rangeFrom, rangeTo));
     if (mode === 'month') {
-      const grid = monthGrid(selected);
-      setStats(await dayStats(db, grid[0], grid[41]));
+      setStats(await dayStats(db, rangeFrom, rangeTo));
     } else {
       const [a, d] = await Promise.all([listAppointmentsBetween(db, week[0], week[6]), busyDays(db, week[0], week[6])]);
       setAppts(a);
@@ -69,6 +75,13 @@ export default function CalendarScreen() {
   const isWork = (d: string) => wd.includes(weekday(d));
 
   const dayAppts = appts.filter((a) => a.date === selected);
+  const dayEvents = events.filter((e) => e.occurrence === selected);
+  const allDayEvents = dayEvents.filter((e) => e.all_day);
+  const eventDays = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const e of events) m[e.occurrence] = (m[e.occurrence] ?? 0) + 1;
+    return m;
+  }, [events]);
   const dayTotal = dayAppts
     .filter((a) => a.status !== 'cancelled' && a.status !== 'no_show')
     .reduce((sum, a) => sum + a.price, 0);
@@ -93,8 +106,11 @@ export default function CalendarScreen() {
         ? `${fromKey(week[0]).getDate()} – ${fmtDayShort(week[6])}`
         : `${fmtDayShort(week[0])} – ${fmtDayShort(week[6])}`;
 
-  const newAt = (date: string, start?: number) =>
-    router.push({ pathname: '/appointment/edit', params: { date, ...(start !== undefined ? { start: String(start) } : {}) } });
+  const timeParams = (date: string, start?: number) => ({ date, ...(start !== undefined ? { start: String(start) } : {}) });
+  // нажатие на «+» или пустое время: сначала спрашиваем, что добавить
+  const newAt = (date: string, start?: number) => setChooser({ date, start });
+  const openEvent = (e: EventOccurrence) =>
+    router.push({ pathname: '/event/edit', params: { id: String(e.id), occurrence: e.occurrence } });
 
   const openAppt = (a: Appointment) => router.push(`/appointment/${a.id}`);
 
@@ -152,16 +168,38 @@ export default function CalendarScreen() {
               {fmtDayLong(selected)}
             </Text>
             <Text style={s.summarySub}>
-              {dayAppts.length
-                ? `${dayAppts.length} ${plural(dayAppts.length, 'запись', 'записи', 'записей')} · ${money(dayTotal, cur)}`
+              {dayAppts.length || dayEvents.length
+                ? [
+                    dayAppts.length ? `${dayAppts.length} ${plural(dayAppts.length, 'запись', 'записи', 'записей')} · ${money(dayTotal, cur)}` : '',
+                    dayEvents.length ? `${dayEvents.length} ${plural(dayEvents.length, 'дело', 'дела', 'дел')}` : '',
+                  ].filter(Boolean).join(' · ')
                 : isWork(selected)
                   ? 'Свободный день · нажмите на время, чтобы записать'
                   : 'Выходной'}
             </Text>
           </View>
+          {allDayEvents.length ? (
+            <View style={s.allDay}>
+              {allDayEvents.map((e) => {
+                const c = category(e.category);
+                return (
+                  <Pressable
+                    key={`${e.id}-${e.occurrence}`}
+                    onPress={() => { tap(); openEvent(e); }}
+                    style={[s.allDayChip, { borderColor: c.color + '88', backgroundColor: c.color + '1f' }]}
+                  >
+                    <Ionicons name={(e.done ? 'checkmark-circle' : c.icon) as IconName} size={15} color={c.color} />
+                    <Text style={[s.allDayText, !!e.done && { textDecorationLine: 'line-through' }]} numberOfLines={1}>{e.title}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
           <Timeline
             days={[selected]}
             appts={appts}
+            events={events}
+            onPressEvent={openEvent}
             workStart={ws}
             workEnd={we}
             workDays={wd}
@@ -182,12 +220,15 @@ export default function CalendarScreen() {
                 <View style={[s.weekNum, d === today && s.weekNumToday]}>
                   <Text style={[s.weekNumText, d === today && s.ink]}>{fromKey(d).getDate()}</Text>
                 </View>
+                <View style={[s.allDayDot, { opacity: events.some((e) => e.all_day && e.occurrence === d) ? 1 : 0 }]} />
               </Pressable>
             ))}
           </View>
           <Timeline
             days={week}
             appts={appts}
+            events={events}
+            onPressEvent={openEvent}
             workStart={ws}
             workEnd={we}
             workDays={wd}
@@ -208,6 +249,7 @@ export default function CalendarScreen() {
             selected={selected}
             today={today}
             stats={stats}
+            eventDays={eventDays}
             workDays={wd}
             onPressDay={(d) => {
               setSelected(d);
@@ -225,7 +267,24 @@ export default function CalendarScreen() {
         </View>
       ) : null}
 
-      <Fab label="Новая запись" onPress={() => newAt(selected)} />
+      <Fab label="Добавить" onPress={() => newAt(selected)} />
+
+      <NewChooser
+        visible={!!chooser}
+        date={chooser?.date ?? selected}
+        start={chooser?.start}
+        onClose={() => setChooser(null)}
+        onAppointment={() => {
+          const c = chooser!;
+          setChooser(null);
+          router.push({ pathname: '/appointment/edit', params: timeParams(c.date, c.start) });
+        }}
+        onEvent={() => {
+          const c = chooser!;
+          setChooser(null);
+          router.push({ pathname: '/event/edit', params: timeParams(c.date, c.start) });
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -234,6 +293,13 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.lg, paddingTop: space.md },
   ink: { color: colors.ink },
+  allDay: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm },
+  allDayChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: 999, borderWidth: 1, maxWidth: '100%',
+  },
+  allDayText: { color: colors.text, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  allDayDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#7aa7ff' },
   segment: {
     flexDirection: 'row', padding: 4, borderRadius: radius.md, backgroundColor: colors.surface,
     borderWidth: 1, borderColor: colors.border,

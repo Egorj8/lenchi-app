@@ -289,7 +289,7 @@ export function listTrashClients(db: Db) {
 
 export async function trashCount(db: Db) {
   const r = await db.getFirstAsync<{ n: number }>(
-    'SELECT (SELECT COUNT(*) FROM appointments WHERE deleted_at IS NOT NULL) + (SELECT COUNT(*) FROM clients WHERE deleted_at IS NOT NULL) AS n',
+    'SELECT (SELECT COUNT(*) FROM appointments WHERE deleted_at IS NOT NULL) + (SELECT COUNT(*) FROM clients WHERE deleted_at IS NOT NULL) + (SELECT COUNT(*) FROM events WHERE deleted_at IS NOT NULL) AS n',
   );
   return r?.n ?? 0;
 }
@@ -308,7 +308,82 @@ export async function emptyTrash(db: Db, olderThanDays = 0) {
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM appointments WHERE deleted_at IS NOT NULL AND deleted_at <= ?', before);
     await db.runAsync('DELETE FROM clients WHERE deleted_at IS NOT NULL AND deleted_at <= ?', before);
+    await db.runAsync('DELETE FROM events WHERE deleted_at IS NOT NULL AND deleted_at <= ?', before);
   });
+}
+
+// ---------- Личные дела ----------
+
+export type PersonalEvent = {
+  id: number;
+  title: string;
+  category: string;
+  date: string;
+  start: number;
+  duration: number;
+  all_day: number;
+  repeat: 'none' | 'daily' | 'weekly';
+  repeat_until: string | null;
+  busy: number;
+  done: number;
+  notes: string;
+  created_at: number;
+  deleted_at: number | null;
+};
+
+export type EventInput = Omit<PersonalEvent, 'id' | 'created_at' | 'deleted_at' | 'done'> & { id?: number; done?: number };
+
+/** Дела, которые могут попасть в диапазон дат (с учётом повторов) */
+export function listEventsBetween(db: Db, from: string, to: string) {
+  return db.getAllAsync<PersonalEvent>(
+    `SELECT * FROM live_events
+     WHERE date <= ? AND ((repeat = 'none' AND date >= ?) OR (repeat != 'none' AND (repeat_until IS NULL OR repeat_until >= ?)))
+     ORDER BY date, all_day DESC, start`,
+    to, from, from,
+  );
+}
+
+export function getEvent(db: Db, id: number) {
+  return db.getFirstAsync<PersonalEvent>('SELECT * FROM live_events WHERE id = ?', id);
+}
+
+export async function saveEvent(db: Db, e: EventInput) {
+  const vals = [e.title.trim(), e.category, e.date, e.start, e.duration, e.all_day, e.repeat, e.repeat_until, e.busy, e.done ?? 0, e.notes] as const;
+  if (e.id) {
+    await db.runAsync(
+      `UPDATE events SET title = ?, category = ?, date = ?, start = ?, duration = ?, all_day = ?, repeat = ?, repeat_until = ?,
+       busy = ?, done = ?, notes = ? WHERE id = ?`,
+      ...vals, e.id,
+    );
+    return e.id;
+  }
+  const r = await db.runAsync(
+    `INSERT INTO events (title, category, date, start, duration, all_day, repeat, repeat_until, busy, done, notes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ...vals, Date.now(),
+  );
+  return r.lastInsertRowId;
+}
+
+export async function setEventDone(db: Db, id: number, done: boolean) {
+  await db.runAsync('UPDATE events SET done = ? WHERE id = ?', done ? 1 : 0, id);
+}
+
+/** В корзину (можно вернуть) */
+export async function deleteEvent(db: Db, id: number) {
+  await db.runAsync('UPDATE events SET deleted_at = ? WHERE id = ?', Date.now(), id);
+}
+
+export async function restoreEvent(db: Db, id: number) {
+  await db.runAsync('UPDATE events SET deleted_at = NULL WHERE id = ?', id);
+}
+
+export async function purgeEvent(db: Db, id: number) {
+  await db.runAsync('DELETE FROM events WHERE id = ?', id);
+}
+
+export function listTrashEvents(db: Db) {
+  return db.getAllAsync<PersonalEvent>('SELECT * FROM events WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC');
 }
 
 // ---------- Финансы ----------

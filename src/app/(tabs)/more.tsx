@@ -136,7 +136,7 @@ export default function MoreScreen() {
         </Card>
 
         <View style={s.footer}>
-          <Text style={s.footerText}>Lenchi Studio · версия 1.1</Text>
+          <Text style={s.footerText}>Lenchi Studio · версия 1.2</Text>
         </View>
       </ScrollView>
     </SafeAreaView>

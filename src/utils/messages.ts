@@ -89,7 +89,14 @@ export function workDays(s: Settings): number[] {
  * Для каждого рабочего дня ищем свободные промежутки между записями
  * и нарезаем их окошками длиной slot_length.
  */
-export function computeFreeSlots(s: Settings, appts: Appointment[], from: string, days: number): DaySlots[] {
+/** extraBusy — занятые интервалы по датам (личные дела), минуты от полуночи */
+export function computeFreeSlots(
+  s: Settings,
+  appts: Appointment[],
+  from: string,
+  days: number,
+  extraBusy: Record<string, { start: number; end: number }[]> = {},
+): DaySlots[] {
   const startMin = parseTime(s.work_start) ?? 600;
   const endMin = parseTime(s.work_end) ?? 1140;
   const len = Math.max(15, Number(s.slot_length) || 120);
@@ -100,10 +107,10 @@ export function computeFreeSlots(s: Settings, appts: Appointment[], from: string
   for (let i = 0; i < days; i++) {
     const date = addDays(from, i);
     if (!wd.includes(weekday(date))) continue;
-    const busy = appts
-      .filter((a) => a.date === date && a.status !== 'cancelled')
-      .map((a) => [a.start, a.start + a.duration] as const)
-      .sort((x, y) => x[0] - y[0]);
+    const busy = [
+      ...appts.filter((a) => a.date === date && a.status !== 'cancelled').map((a) => [a.start, a.start + a.duration] as const),
+      ...(extraBusy[date] ?? []).map((b) => [b.start, b.end] as const),
+    ].sort((x, y) => x[0] - y[0]);
 
     let cursor = startMin;
     if (date === today) {
