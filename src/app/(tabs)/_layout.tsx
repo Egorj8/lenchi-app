@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
 import type { ColorValue } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { IconName } from '@/components/ui';
 import { colors } from '@/theme';
 
@@ -10,6 +11,8 @@ const icon = (name: IconName, active: IconName) =>
   );
 
 export default function TabLayout() {
+  // снизу учитываем системные кнопки Android / полоску жестов, иначе панель уходит под них
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -19,8 +22,9 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: colors.bg2,
           borderTopColor: colors.border,
-          height: 64,
+          height: 60 + insets.bottom,
           paddingTop: 6,
+          paddingBottom: insets.bottom + 6,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         sceneStyle: { backgroundColor: colors.bg },
