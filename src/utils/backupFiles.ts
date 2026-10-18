@@ -99,4 +99,11 @@ export async function pickBackupText(): Promise<string | null> {
   return res.result.text();
 }
 
+/** Системный выбор файла (Excel из ГномГуру) — содержимое байтами. null — если отменили. */
+export async function pickFileBytes(): Promise<Uint8Array | null> {
+  const res = await File.pickFileAsync({ mimeTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel', 'application/octet-stream', '*/*'] });
+  if (res.canceled || !res.result) return null;
+  return res.result.bytes();
+}
+
 export const backupFilesSupported = true;

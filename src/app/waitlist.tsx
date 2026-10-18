@@ -16,6 +16,7 @@ import { addDays, fmtDayLong, fmtDayShort, fmtTime, todayKey } from '@/utils/dat
 import { emitDataChanged } from '@/utils/events';
 import { computeFreeSlots, type DaySlots } from '@/utils/freeSlots';
 import { busyIntervals, expandEvents } from '@/utils/personal';
+import { callName } from '@/utils/names';
 
 const AHEAD = 21;
 
@@ -67,7 +68,7 @@ export default function WaitlistScreen() {
             const slot = firstMatchingSlot(w, slots);
             const text = slot
               ? fillTemplate(settings.waitlist_template, {
-                  имя: w.client_name.split(' ')[0], дата: fmtDayLong(slot.date), время: fmtTime(slot.start), мастер: settings.master_name,
+                  имя: callName(w.client_name, w.client_call), дата: fmtDayLong(slot.date), время: fmtTime(slot.start), мастер: settings.master_name,
                 })
               : '';
             return (

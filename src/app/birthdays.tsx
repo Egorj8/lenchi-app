@@ -8,6 +8,7 @@ import { clientsWithBirthday, getSettings, type Client, type Settings } from '@/
 import { colors, space } from '@/theme';
 import { fillTemplate, fmtBirthday, nextBirthday, type NextBirthday } from '@/utils/attention';
 import { plural, todayKey } from '@/utils/date';
+import { callName } from '@/utils/names';
 
 type Row = Client & { next: NextBirthday };
 
@@ -50,7 +51,7 @@ export default function BirthdaysScreen() {
         <ContactActions
           phone={r.phone}
           telegram={r.telegram}
-          text={fillTemplate(settings.birthday_template, { имя: r.name.split(' ')[0], мастер: settings.master_name })}
+          text={fillTemplate(settings.birthday_template, { имя: callName(r.name, r.call_name), мастер: settings.master_name })}
         />
       ) : null}
     </Card>

@@ -18,6 +18,7 @@ export default function ClientEdit() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const editId = id ? Number(id) : undefined;
   const [name, setName] = useState('');
+  const [callAs, setCallAs] = useState('');
   const [phone, setPhone] = useState('');
   const [telegram, setTelegram] = useState('');
   const [notes, setNotes] = useState('');
@@ -30,6 +31,7 @@ export default function ClientEdit() {
     getClient(db, editId, todayKey()).then((c) => {
       if (!c) return;
       setName(c.name);
+      setCallAs(c.call_name);
       setPhone(formatPhone(c.phone));
       setTelegram(c.telegram);
       setNotes(c.notes);
@@ -46,7 +48,7 @@ export default function ClientEdit() {
         setSaving(false);
         return showAlert('День рождения', 'Напишите дату как 12.03 или 12.03.1990.');
       }
-      const newId = await saveClient(db, { id: editId, name, phone, telegram, notes, birthday: bd });
+      const newId = await saveClient(db, { id: editId, name, call_name: callAs, phone, telegram, notes, birthday: bd });
       success();
       if (editId) router.back();
       else router.replace(`/client/${newId}`);
@@ -81,6 +83,13 @@ export default function ClientEdit() {
       <ScrollView contentContainerStyle={{ padding: space.lg }} keyboardShouldPersistTaps="handled">
         <Button title="Выбрать из контактов" icon="people-outline" variant="secondary" onPress={fromContacts} style={{ marginBottom: space.lg }} />
         <Field label="Имя" value={name} onChangeText={setName} placeholder="Имя и фамилия" autoFocus={!editId} />
+        <Field
+          label="Обращение в сообщениях"
+          value={callAs}
+          onChangeText={setCallAs}
+          placeholder={name.trim().split(/\s+/)[0] || 'Катя'}
+          hint="Как писать в напоминаниях: «Здравствуйте, Катя!». Пусто — первое слово имени."
+        />
         <Field
           label="Телефон"
           value={phone}

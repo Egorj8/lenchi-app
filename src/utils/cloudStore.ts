@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Db } from '@/db/types';
 import type { CloudRequest } from './cloud';
-import { cloudErrorText, syncCloud } from './cloudSync';
+import { cloudErrorText, hideRequests, syncCloud } from './cloudSync';
 import { todayKey } from './date';
 import { notifyNewRequests } from './notify';
 
@@ -61,6 +61,12 @@ export function runCloudSync(db: Db): Promise<void> {
     }
   })();
   return running;
+}
+
+/** Убрать обработанные заявки из списка */
+export async function hideHandled(db: Db, ids: number[]) {
+  await hideRequests(db, ids);
+  set({ requests: state.requests.filter((r) => r.status === 'new' || !ids.includes(r.id)) });
 }
 
 /** После «принять» / «отклонить» — сразу убрать заявку из новых, не дожидаясь обмена */

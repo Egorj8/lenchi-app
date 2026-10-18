@@ -50,4 +50,18 @@ export function pickBackupText(): Promise<string | null> {
   });
 }
 
+export function pickFileBytes(): Promise<Uint8Array | null> {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx,.xls';
+    input.onchange = () => {
+      const f = input.files?.[0];
+      if (!f) return resolve(null);
+      f.arrayBuffer().then((b) => resolve(new Uint8Array(b)), () => resolve(null));
+    };
+    input.click();
+  });
+}
+
 export const backupFilesSupported = false;

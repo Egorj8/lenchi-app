@@ -15,6 +15,7 @@ import { addDays, fmtDayShort, plural, todayKey } from '@/utils/date';
 import { emitDataChanged } from '@/utils/events';
 import { computeFreeSlots, type DaySlots } from '@/utils/freeSlots';
 import { busyIntervals, expandEvents } from '@/utils/personal';
+import { callName } from '@/utils/names';
 
 const INTERVALS = [14, 21, 28, 35];
 const SNOOZE_DAYS = 7;
@@ -80,7 +81,7 @@ export default function RebookScreen() {
       ) : (
         rows.map((r) => {
           const text = fillTemplate(settings.rebook_template, {
-            имя: r.name.split(' ')[0], дней: String(r.days_since), окошки: free, мастер: settings.master_name,
+            имя: callName(r.name, r.call_name), дней: String(r.days_since), окошки: free, мастер: settings.master_name,
           });
           return (
             <Card key={r.id} style={s.card}>

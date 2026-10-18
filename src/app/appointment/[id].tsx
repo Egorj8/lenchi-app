@@ -177,8 +177,8 @@ export default function AppointmentScreen() {
               onPress={() => { tap(); setStatus(st); }}
               style={({ pressed }) => [s.status, on && { borderColor: m.color, backgroundColor: m.color + '1f' }, pressed && { opacity: 0.7 }]}
             >
-              <Ionicons name={m.icon} size={22} color={on ? m.color : colors.muted} />
-              <Text style={[s.statusText, on && { color: m.color }]}>{m.label}</Text>
+              <Ionicons name={m.icon} size={20} color={on ? m.color : colors.muted} />
+              <Text style={[s.statusText, on && { color: m.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{m.label}</Text>
             </Pressable>
           );
         })}
@@ -216,8 +216,8 @@ const s = StyleSheet.create({
   notes: { color: colors.text, fontSize: 15, lineHeight: 22 },
   statuses: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   status: {
-    flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12,
+    flexBasis: '48%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 10,
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface,
   },
-  statusText: { color: colors.muted, fontSize: 14, fontWeight: '600' },
+  statusText: { color: colors.muted, fontSize: 14, fontWeight: '600', flexShrink: 1 },
 });

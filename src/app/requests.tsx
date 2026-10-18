@@ -1,14 +1,14 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ContactActions } from '@/components/ContactActions';
-import { Badge, Button, Card, Empty, SectionTitle, success } from '@/components/ui';
+import { Badge, Button, Card, Empty, SectionTitle, success, tap } from '@/components/ui';
 import { useDb } from '@/db/provider';
 import { getSettings, listAppointmentsBetween, listEventsBetween, type Appointment, type Settings } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { BOOKING_URL, outsideWorkHours, requestConflicts, type CloudRequest } from '@/utils/cloud';
-import { markRequest, runCloudSync, useCloud } from '@/utils/cloudStore';
+import { hideHandled, markRequest, runCloudSync, useCloud } from '@/utils/cloudStore';
 import { acceptRequest, cloudErrorText, declineRequest } from '@/utils/cloudSync';
 import { addDays, fmtDayLong, fmtDuration, fmtTime, todayKey, weekday } from '@/utils/date';
 import { showAlert } from '@/utils/dialog';
@@ -130,6 +130,13 @@ export default function RequestsScreen() {
     else showAlert('Запись не найдена', 'Возможно, её удалили из календаря.');
   };
 
+  // обработанные заявки можно убрать из списка — в календаре и в облаке ничего не меняется
+  const hideAll = () =>
+    showAlert('Убрать обработанные?', 'Принятые, отклонённые и отменённые заявки пропадут из этого списка. Записи в календаре останутся.', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Убрать', onPress: () => hideHandled(db, done.map((r) => r.id)) },
+    ]);
+
   if (!cloud.configured && !cloud.syncing) {
     return (
       <View style={s.screen}>
@@ -153,6 +160,11 @@ export default function RequestsScreen() {
           <Text style={s.name} numberOfLines={1}>{r.name}</Text>
           {r.first_time ? <Badge label="впервые" color={colors.info} /> : null}
           <Badge label={STATUS[r.status].label} color={STATUS[r.status].color} />
+          {!isNew ? (
+            <Pressable accessibilityLabel="Убрать из списка" hitSlop={10} onPress={() => { tap(); hideHandled(db, [r.id]); }} style={({ pressed }) => [s.hide, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="close" size={20} color={colors.dim} />
+            </Pressable>
+          ) : null}
         </View>
         <View style={s.line}>
           <Ionicons name="calendar-outline" size={16} color={colors.yellow} />
@@ -210,7 +222,7 @@ export default function RequestsScreen() {
 
       {done.length ? (
         <>
-          <SectionTitle>За 30 дней</SectionTitle>
+          <SectionTitle right={<Pressable onPress={hideAll} hitSlop={8}><Text style={s.link}>Убрать все</Text></Pressable>}>Обработанные</SectionTitle>
           {done.map(renderCard)}
         </>
       ) : null}
@@ -237,5 +249,7 @@ const s = StyleSheet.create({
   },
   warnText: { color: colors.yellow1, fontSize: 13, flex: 1 },
   actions: { flexDirection: 'row', gap: space.sm, marginTop: 4 },
+  hide: { marginLeft: 2, padding: 2 },
+  link: { color: colors.yellow, fontSize: 14, fontWeight: '700' },
   empty: { color: colors.dim, fontSize: 14, lineHeight: 20, marginBottom: space.lg },
 });

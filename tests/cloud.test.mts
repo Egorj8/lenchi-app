@@ -6,7 +6,7 @@ import type { Db, Param } from '../src/db/types.ts';
 import { migrateDbIfNeeded } from '../src/db/schema.ts';
 import { getSettings, listAppointmentsBetween, listClients, listServices, saveAppointment, saveClient, saveEvent, saveSettings, setAppointmentStatus } from '../src/db/queries.ts';
 import { buildBusy, buildConfig, requestConflicts, requestServices, type CloudRequest } from '../src/utils/cloud.ts';
-import { acceptRequest, declineRequest, syncCloud } from '../src/utils/cloudSync.ts';
+import { acceptRequest, declineRequest, hideRequests, syncCloud } from '../src/utils/cloudSync.ts';
 import { expandEvents } from '../src/utils/personal.ts';
 import { weekday } from '../src/utils/date.ts';
 import { outsideWorkHours } from '../src/utils/cloud.ts';
@@ -170,4 +170,18 @@ test('облако: услуги заявки, пересечения и раб�
   assert.equal(outsideWorkHours(req(), s, weekday), false); // чт 13:00–15:00
   assert.equal(outsideWorkHours(req({ day: '2026-10-21' }), s, weekday), true); // среда — выходной
   assert.equal(outsideWorkHours(req({ start_min: 18 * 60 }), s, weekday), true); // до 20:00 — позже конца дня
+});
+
+test('облако: обработанные заявки можно убрать из списка, новые — нельзя', async () => {
+  const db = makeDb();
+  await migrateDbIfNeeded(db);
+  await saveSettings(db, { cloud_key: 'k' });
+  const cloud = fakeCloud({ master_requests: [req({ id: 9 }), req({ id: 8, status: 'declined' }), req({ id: 7, status: 'accepted' })] });
+  await hideRequests(db, [7, 8, 9]);
+  const r = await syncCloud(db, '2026-10-18', cloud.impl);
+  assert.deepEqual(r!.requests.map((x) => x.id), [9], 'новая заявка видна, даже если её «убрали»');
+  // через 30 дней облако их больше не присылает — номера забываются
+  const later = fakeCloud({ master_requests: [req({ id: 8, status: 'declined' })] });
+  await syncCloud(db, '2026-10-18', later.impl);
+  assert.equal((await getSettings(db)).cloud_hidden, '8');
 });

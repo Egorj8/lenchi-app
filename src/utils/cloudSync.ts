@@ -58,14 +58,28 @@ export async function syncCloud(db: Db, today: string, fetchImpl?: Fetch): Promi
     save.cloud_busy_hash = busyHash;
   }
 
-  const requests = (await rpc<CloudRequest[]>('master_requests', { p_key: key, p_days: 30 }, fetchImpl)) ?? [];
+  const all = (await rpc<CloudRequest[]>('master_requests', { p_key: key, p_days: 30 }, fetchImpl)) ?? [];
+  const hidden = hiddenIds(s.cloud_hidden);
+  const requests = all.filter((r) => !(r.status !== 'new' && hidden.has(r.id)));
   const seen = Number(s.cloud_seen_id) || 0;
   const fresh = requests.filter((r) => r.status === 'new' && r.id > seen);
   const at = Date.now();
-  save.cloud_seen_id = String(Math.max(seen, ...requests.map((r) => r.id)));
+  save.cloud_seen_id = String(Math.max(seen, ...all.map((r) => r.id)));
+  // старше 30 дней облако уже не присылает — забываем их номера
+  const keep = all.filter((r) => hidden.has(r.id)).map((r) => r.id).join(',');
+  if (keep !== s.cloud_hidden) save.cloud_hidden = keep;
   save.cloud_last_sync = String(at);
   await saveSettings(db, save);
   return { requests, fresh, at };
+}
+
+const hiddenIds = (v: string) => new Set(v.split(',').map(Number).filter(Boolean));
+
+/** Убрать обработанные заявки из списка (в облаке они остаются) */
+export async function hideRequests(db: Db, ids: number[]) {
+  const hidden = hiddenIds((await getSettings(db)).cloud_hidden);
+  for (const id of ids) hidden.add(id);
+  await saveSettings(db, { cloud_hidden: [...hidden].join(',') });
 }
 
 /** Забыть, что выгружали — при смене ключа или «Обновить сейчас» всё уйдёт заново */

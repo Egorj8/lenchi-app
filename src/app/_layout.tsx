@@ -50,6 +50,7 @@ export default function RootLayout() {
             <Stack.Screen name="client/edit" options={{ presentation: 'modal', title: 'Клиент' }} />
             <Stack.Screen name="client/[id]" options={{ title: 'Клиент' }} />
             <Stack.Screen name="client/import" options={{ title: 'Импорт из контактов' }} />
+            <Stack.Screen name="client/gnom" options={{ title: 'Из ГномГуру' }} />
             <Stack.Screen name="event/edit" options={{ presentation: 'modal', title: 'Личное дело' }} />
             <Stack.Screen name="rebook" options={{ title: 'Пора на коррекцию' }} />
             <Stack.Screen name="birthdays" options={{ title: 'Дни рождения' }} />

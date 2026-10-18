@@ -12,6 +12,15 @@ import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
 import { formatPhone } from '@/utils/phone';
 import { useDataChanged } from '@/utils/events';
+import { showAlert } from '@/utils/dialog';
+
+// откуда перенести клиенток: контакты телефона или выгрузка ГномГуру
+const chooseImport = () =>
+  showAlert('Перенести клиенток', 'Откуда взять список?', [
+    { text: 'Отмена', style: 'cancel' },
+    { text: 'Файл ГномГуру', onPress: () => router.push('/client/gnom') },
+    { text: 'Контакты', onPress: () => router.push('/client/import') },
+  ]);
 
 export default function ClientsScreen() {
   const db = useDb();
@@ -45,7 +54,7 @@ export default function ClientsScreen() {
         <ScreenTitle
           subtitle={clients.length ? `${clients.length} ${plural(clients.length, 'клиентка', 'клиентки', 'клиенток')}` : 'База клиентов'}
           title="Клиенты"
-          right={<IconButton icon="cloud-download-outline" label="Импорт из контактов" color={colors.yellow} onPress={() => router.push('/client/import')} />}
+          right={<IconButton icon="cloud-download-outline" label="Перенести клиенток" color={colors.yellow} onPress={chooseImport} />}
         />
         <View style={s.search}>
           <Ionicons name="search" size={18} color={colors.dim} />
@@ -71,10 +80,13 @@ export default function ClientsScreen() {
           <Empty
             icon="people-outline"
             title={query ? 'Никого не нашли' : 'Пока нет клиентов'}
-            text={query ? 'Попробуйте другой запрос.' : 'Перенесите клиенток из контактов телефона или добавьте вручную кнопкой «+».'}
+            text={query ? 'Попробуйте другой запрос.' : 'Перенесите клиенток из контактов телефона или из ГномГуру, или добавьте вручную кнопкой «+».'}
           >
             {query ? null : (
-              <Button title="Импорт из контактов" icon="people" onPress={() => router.push('/client/import')} style={{ marginTop: 12 }} />
+              <>
+                <Button title="Импорт из контактов" icon="people" onPress={() => router.push('/client/import')} style={{ marginTop: 12 }} />
+                <Button title="Из ГномГуру (файл Excel)" icon="document-text-outline" variant="secondary" onPress={() => router.push('/client/gnom')} style={{ marginTop: 8 }} />
+              </>
             )}
           </Empty>
         }

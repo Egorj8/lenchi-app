@@ -17,6 +17,8 @@ export type Service = {
 export type Client = {
   id: number;
   name: string;
+  /** обращение в сообщениях; пусто — первое слово имени */
+  call_name: string;
   phone: string;
   telegram: string;
   notes: string;
@@ -46,6 +48,7 @@ export type Appointment = {
   notes: string;
   created_at: number;
   client_name: string | null;
+  client_call: string | null;
   client_phone: string | null;
   client_telegram: string | null;
   services_label: string | null;
@@ -110,11 +113,18 @@ const CLIENT_STATS = `
     (SELECT MIN(date) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'planned' AND a.date >= ?) AS next_visit
   FROM live_clients c`;
 
-export function listClients(db: Db, today: string, query = '') {
-  const q = `%${query.trim().toLowerCase()}%`;
-  return db.getAllAsync<ClientRow>(
-    `${CLIENT_STATS} WHERE lower(c.name) LIKE ? OR c.phone LIKE ? OR lower(c.telegram) LIKE ? ORDER BY c.name COLLATE NOCASE`,
-    today, q, q, q,
+export async function listClients(db: Db, today: string, query = '') {
+  const rows = await db.getAllAsync<ClientRow>(`${CLIENT_STATS} ORDER BY c.name COLLATE NOCASE`, today);
+  // ищем в JS: lower() и LIKE в SQLite не понимают регистр русских букв
+  const q = query.trim().toLowerCase();
+  if (!q) return rows;
+  const digits = q.replace(/\D/g, '');
+  return rows.filter(
+    (c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.call_name.toLowerCase().includes(q) ||
+      c.telegram.toLowerCase().includes(q.replace(/^@/, '')) ||
+      (digits.length >= 3 && c.phone.includes(digits)),
   );
 }
 
@@ -124,7 +134,7 @@ export function getClient(db: Db, id: number, today: string) {
 
 export async function saveClient(
   db: Db,
-  c: { id?: number; name: string; phone: string; telegram: string; notes: string; birthday?: string | null },
+  c: { id?: number; name: string; call_name?: string; phone: string; telegram: string; notes: string; birthday?: string | null },
 ) {
   const country = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'"))?.value ?? '90';
   const phone = normalizePhone(c.phone, country);
@@ -134,11 +144,12 @@ export async function saveClient(
       'UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ?, birthday = ? WHERE id = ?',
       c.name.trim(), phone, tg, c.notes, c.birthday ?? null, c.id,
     );
+    if (c.call_name !== undefined) await db.runAsync('UPDATE clients SET call_name = ? WHERE id = ?', c.call_name.trim(), c.id);
     return c.id;
   }
   const r = await db.runAsync(
-    'INSERT INTO clients (name, phone, telegram, notes, birthday, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    c.name.trim(), phone, tg, c.notes, c.birthday ?? null, Date.now(),
+    'INSERT INTO clients (name, call_name, phone, telegram, notes, birthday, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    c.name.trim(), (c.call_name ?? '').trim(), phone, tg, c.notes, c.birthday ?? null, Date.now(),
   );
   return r.lastInsertRowId;
 }
@@ -180,7 +191,7 @@ export async function restoreClient(db: Db, id: number) {
 // ---------- Записи ----------
 
 const APPT_SELECT = `
-  SELECT a.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram,
+  SELECT a.*, c.name AS client_name, c.call_name AS client_call, c.phone AS client_phone, c.telegram AS client_telegram,
     (SELECT GROUP_CONCAT(name, ', ') FROM appointment_services s WHERE s.appointment_id = a.id) AS services_label
   FROM live_appointments a LEFT JOIN clients c ON c.id = a.client_id`;
 
@@ -404,7 +415,7 @@ export async function setReminded(db: Db, id: number) {
 }
 
 export type RebookRow = {
-  id: number; name: string; phone: string; telegram: string;
+  id: number; name: string; call_name: string; phone: string; telegram: string;
   last_visit: string; days_since: number; last_services: string | null;
 };
 
@@ -414,7 +425,7 @@ export type RebookRow = {
  */
 export function rebookCandidates(db: Db, today: string, minDays: number) {
   return db.getAllAsync<RebookRow>(
-    `SELECT c.id, c.name, c.phone, c.telegram, v.last_visit,
+    `SELECT c.id, c.name, c.call_name, c.phone, c.telegram, v.last_visit,
        CAST(julianday(?) - julianday(v.last_visit) AS INTEGER) AS days_since,
        (SELECT GROUP_CONCAT(s.name, ', ') FROM appointment_services s
          JOIN live_appointments a ON a.id = s.appointment_id
@@ -442,12 +453,12 @@ export function clientsWithBirthday(db: Db) {
 export type WaitEntry = {
   id: number; client_id: number; days: string; part: 'any' | 'morning' | 'day' | 'evening'; note: string;
   until: string | null; created_at: number;
-  client_name: string; client_phone: string; client_telegram: string;
+  client_name: string; client_call: string; client_phone: string; client_telegram: string;
 };
 
 export function listWaitlist(db: Db, today: string) {
   return db.getAllAsync<WaitEntry>(
-    `SELECT w.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram
+    `SELECT w.*, c.name AS client_name, c.call_name AS client_call, c.phone AS client_phone, c.telegram AS client_telegram
      FROM live_waitlist w JOIN live_clients c ON c.id = w.client_id
      WHERE w.until IS NULL OR w.until >= ?
      ORDER BY w.created_at`,
@@ -457,7 +468,7 @@ export function listWaitlist(db: Db, today: string) {
 
 export function getWaitEntry(db: Db, id: number) {
   return db.getFirstAsync<WaitEntry>(
-    `SELECT w.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram
+    `SELECT w.*, c.name AS client_name, c.call_name AS client_call, c.phone AS client_phone, c.telegram AS client_telegram
      FROM waitlist w JOIN clients c ON c.id = w.client_id WHERE w.id = ?`,
     id,
   );

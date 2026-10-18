@@ -1,7 +1,7 @@
 import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 
-const DATABASE_VERSION = 5;
+const DATABASE_VERSION = 6;
 
 // Прайс Елены со страницы записи в ГномГуру
 const SEED_SERVICES: [string, string, number, number][] = [
@@ -41,6 +41,8 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   cloud_busy_hash: '',
   cloud_seen_id: '0',
   cloud_last_sync: '0',
+  // обработанные заявки, которые мастер убрала из списка (номера через запятую)
+  cloud_hidden: '',
   confirm_template:
     'Здравствуйте, {имя}! 💅 Записала вас на {дата} в {время}: {услуга}.\nАдрес: {адрес}\nДо встречи! {мастер}',
   decline_template:
@@ -200,6 +202,11 @@ export async function migrateDbIfNeeded(db: Db) {
         done_at INTEGER
       );
     `);
+  }
+
+  if (current < 6) {
+    // v6: обращение в сообщениях («Катя» для «Лопатина Катя») — пришло из ГномГуру
+    await addColumn(db, 'clients', 'call_name', "TEXT NOT NULL DEFAULT ''");
   }
 
   // Представления без удалённого. SELECT * фиксирует столбцы при создании,

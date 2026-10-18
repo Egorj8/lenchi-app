@@ -18,7 +18,7 @@ export function money(n: number, currency: string) {
 
 export function reminderText(a: Appointment, s: Settings) {
   return fill(s.reminder_template, {
-    имя: a.client_name?.split(' ')[0] ?? '',
+    имя: callName(a.client_name, a.client_call),
     дата: fmtDayLong(a.date),
     время: fmtTime(a.start),
     услуга: a.services_label ?? 'маникюр',
@@ -81,6 +81,7 @@ export async function openTelegram(username: string, phone: string, text = '') {
 
 export { computeFreeSlots, workDays, type DaySlots } from './freeSlots';
 import type { DaySlots } from './freeSlots';
+import { callName } from '@/utils/names';
 
 export function slotsPost(s: Settings, slots: DaySlots[]) {
   const header = fill(s.slots_header, { телефон: s.phone, мастер: s.master_name });
