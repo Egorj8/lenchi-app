@@ -8,7 +8,8 @@ import { NewChooser } from '@/components/NewChooser';
 import { TIMELINE_LABEL_W, Timeline } from '@/components/Timeline';
 import { Fab, IconButton, ScreenTitle, tap, type IconName } from '@/components/ui';
 import { useDb } from '@/db/provider';
-import { busyDays, dayStats, getSettings, listAppointmentsBetween, listEventsBetween, type Appointment, type Settings } from '@/db/queries';
+import { busyDays, clientsWithBirthday, dayStats, getSettings, listAppointmentsBetween, listEventsBetween, type Appointment, type Client, type Settings } from '@/db/queries';
+import { nextBirthday } from '@/utils/attention';
 import { colors, radius, space } from '@/theme';
 import { addMonths, monthGrid, sameMonth, weekDays } from '@/utils/calendar';
 import { addDays, fmtDayLong, fmtDayShort, fmtMonth, fromKey, nowMinutes, parseTime, plural, relativeDay, todayKey, weekday, weekdayShort } from '@/utils/date';
@@ -30,6 +31,7 @@ export default function CalendarScreen() {
   const [dots, setDots] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<Record<string, { n: number; sum: number }>>({});
   const [events, setEvents] = useState<EventOccurrence[]>([]);
+  const [bdClients, setBdClients] = useState<Client[]>([]);
   const [chooser, setChooser] = useState<{ date: string; start?: number } | null>(null);
 
   const week = useMemo(() => weekDays(selected), [selected]);
@@ -53,6 +55,7 @@ export default function CalendarScreen() {
   const load = useCallback(async () => {
     tick();
     setSettings(await getSettings(db));
+    setBdClients(await clientsWithBirthday(db));
     // личные дела: берём весь видимый диапазон и разворачиваем повторы
     const [rangeFrom, rangeTo] = mode === 'month' ? [monthGrid(selected)[0], monthGrid(selected)[41]] : [week[0], week[6]];
     setEvents(expandEvents(await listEventsBetween(db, rangeFrom, rangeTo), rangeFrom, rangeTo));
@@ -77,6 +80,7 @@ export default function CalendarScreen() {
   const dayAppts = appts.filter((a) => a.date === selected);
   const dayEvents = events.filter((e) => e.occurrence === selected);
   const allDayEvents = dayEvents.filter((e) => e.all_day);
+  const dayBirthdays = bdClients.filter((c) => nextBirthday(c.birthday!, selected).daysLeft === 0);
   const eventDays = useMemo(() => {
     const m: Record<string, number> = {};
     for (const e of events) m[e.occurrence] = (m[e.occurrence] ?? 0) + 1;
@@ -178,8 +182,17 @@ export default function CalendarScreen() {
                   : 'Выходной'}
             </Text>
           </View>
-          {allDayEvents.length ? (
+          {allDayEvents.length || dayBirthdays.length ? (
             <View style={s.allDay}>
+              {dayBirthdays.map((c) => (
+                <Pressable
+                  key={`bd${c.id}`}
+                  onPress={() => { tap(); router.push('/birthdays'); }}
+                  style={[s.allDayChip, { borderColor: '#ff6b9a88', backgroundColor: '#ff6b9a1f' }]}
+                >
+                  <Text style={s.allDayText} numberOfLines={1}>🎂 {c.name.split(' ')[0]}</Text>
+                </Pressable>
+              ))}
               {allDayEvents.map((e) => {
                 const c = category(e.category);
                 return (

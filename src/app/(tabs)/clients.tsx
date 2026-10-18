@@ -5,7 +5,9 @@ import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Card, Empty, Fab, IconButton, ScreenTitle } from '@/components/ui';
-import { listClients, type ClientRow } from '@/db/queries';
+import { AttentionBar } from '@/components/AttentionBar';
+import { clientsWithBirthday, getSettings, listClients, listWaitlist, rebookCandidates, type ClientRow } from '@/db/queries';
+import { nextBirthday } from '@/utils/attention';
 import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
 import { formatPhone } from '@/utils/phone';
@@ -15,9 +17,23 @@ export default function ClientsScreen() {
   const db = useDb();
   const [query, setQuery] = useState('');
   const [clients, setClients] = useState<ClientRow[]>([]);
+  const [counts, setCounts] = useState({ rebook: 0, birthdays: 0, waitlist: 0 });
 
   const load = useCallback(async () => {
-    setClients(await listClients(db, todayKey(), query));
+    const t = todayKey();
+    const s = await getSettings(db);
+    const [list, rebook, bd, wait] = await Promise.all([
+      listClients(db, t, query),
+      rebookCandidates(db, t, Number(s.rebook_days) || 21),
+      clientsWithBirthday(db),
+      listWaitlist(db, t),
+    ]);
+    setClients(list);
+    setCounts({
+      rebook: rebook.length,
+      birthdays: bd.filter((c) => nextBirthday(c.birthday!, t).daysLeft <= 14).length,
+      waitlist: wait.length,
+    });
   }, [db, query]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
@@ -50,6 +66,7 @@ export default function ClientsScreen() {
         keyExtractor={(c) => String(c.id)}
         contentContainerStyle={s.list}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={query ? null : <AttentionBar {...counts} />}
         ListEmptyComponent={
           <Empty
             icon="people-outline"

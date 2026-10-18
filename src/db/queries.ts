@@ -21,6 +21,9 @@ export type Client = {
   telegram: string;
   notes: string;
   created_at: number;
+  /** 'MM-DD' или 'YYYY-MM-DD' */
+  birthday: string | null;
+  rebook_snoozed_until: string | null;
 };
 
 export type ClientRow = Client & {
@@ -46,6 +49,7 @@ export type Appointment = {
   client_phone: string | null;
   client_telegram: string | null;
   services_label: string | null;
+  reminded_at: number | null;
 };
 
 export type Settings = typeof DEFAULT_SETTINGS;
@@ -118,17 +122,23 @@ export function getClient(db: Db, id: number, today: string) {
   return db.getFirstAsync<ClientRow>(`${CLIENT_STATS} WHERE c.id = ?`, today, id);
 }
 
-export async function saveClient(db: Db, c: { id?: number; name: string; phone: string; telegram: string; notes: string }) {
+export async function saveClient(
+  db: Db,
+  c: { id?: number; name: string; phone: string; telegram: string; notes: string; birthday?: string | null },
+) {
   const country = (await db.getFirstAsync<{ value: string }>("SELECT value FROM settings WHERE key = 'default_country'"))?.value ?? '90';
   const phone = normalizePhone(c.phone, country);
   const tg = c.telegram.trim().replace(/^@/, '').replace(/^https?:\/\/t\.me\//, '');
   if (c.id) {
-    await db.runAsync('UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ? WHERE id = ?', c.name.trim(), phone, tg, c.notes, c.id);
+    await db.runAsync(
+      'UPDATE clients SET name = ?, phone = ?, telegram = ?, notes = ?, birthday = ? WHERE id = ?',
+      c.name.trim(), phone, tg, c.notes, c.birthday ?? null, c.id,
+    );
     return c.id;
   }
   const r = await db.runAsync(
-    'INSERT INTO clients (name, phone, telegram, notes, created_at) VALUES (?, ?, ?, ?, ?)',
-    c.name.trim(), phone, tg, c.notes, Date.now(),
+    'INSERT INTO clients (name, phone, telegram, notes, birthday, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    c.name.trim(), phone, tg, c.notes, c.birthday ?? null, Date.now(),
   );
   return r.lastInsertRowId;
 }
@@ -384,6 +394,95 @@ export async function purgeEvent(db: Db, id: number) {
 
 export function listTrashEvents(db: Db) {
   return db.getAllAsync<PersonalEvent>('SELECT * FROM events WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC');
+}
+
+// ---------- Этап 3: внимание мастера ----------
+
+/** Напоминание о записи отправлено (для утренней сводки) */
+export async function setReminded(db: Db, id: number) {
+  await db.runAsync('UPDATE appointments SET reminded_at = ? WHERE id = ?', Date.now(), id);
+}
+
+export type RebookRow = {
+  id: number; name: string; phone: string; telegram: string;
+  last_visit: string; days_since: number; last_services: string | null;
+};
+
+/**
+ * «Пора на коррекцию»: была на приёме больше minDays назад (но не больше полугода),
+ * будущих записей нет, и мастер не откладывал напоминание.
+ */
+export function rebookCandidates(db: Db, today: string, minDays: number) {
+  return db.getAllAsync<RebookRow>(
+    `SELECT c.id, c.name, c.phone, c.telegram, v.last_visit,
+       CAST(julianday(?) - julianday(v.last_visit) AS INTEGER) AS days_since,
+       (SELECT GROUP_CONCAT(s.name, ', ') FROM appointment_services s
+         JOIN live_appointments a ON a.id = s.appointment_id
+         WHERE a.client_id = c.id AND a.status = 'done' AND a.date = v.last_visit) AS last_services
+     FROM live_clients c
+     JOIN (SELECT client_id, MAX(date) AS last_visit FROM live_appointments WHERE status = 'done' GROUP BY client_id) v
+       ON v.client_id = c.id
+     WHERE julianday(?) - julianday(v.last_visit) BETWEEN ? AND 180
+       AND NOT EXISTS (SELECT 1 FROM live_appointments f WHERE f.client_id = c.id AND f.status = 'planned' AND f.date >= ?)
+       AND (c.rebook_snoozed_until IS NULL OR c.rebook_snoozed_until < ?)
+     ORDER BY days_since DESC`,
+    today, today, minDays, today, today,
+  );
+}
+
+/** Не показывать в «Пора на коррекцию» до даты (написали — ждём ответа) */
+export async function snoozeRebook(db: Db, id: number, until: string | null) {
+  await db.runAsync('UPDATE clients SET rebook_snoozed_until = ? WHERE id = ?', until, id);
+}
+
+export function clientsWithBirthday(db: Db) {
+  return db.getAllAsync<Client>("SELECT * FROM live_clients WHERE birthday IS NOT NULL AND birthday != ''");
+}
+
+export type WaitEntry = {
+  id: number; client_id: number; days: string; part: 'any' | 'morning' | 'day' | 'evening'; note: string;
+  until: string | null; created_at: number;
+  client_name: string; client_phone: string; client_telegram: string;
+};
+
+export function listWaitlist(db: Db, today: string) {
+  return db.getAllAsync<WaitEntry>(
+    `SELECT w.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram
+     FROM live_waitlist w JOIN live_clients c ON c.id = w.client_id
+     WHERE w.until IS NULL OR w.until >= ?
+     ORDER BY w.created_at`,
+    today,
+  );
+}
+
+export function getWaitEntry(db: Db, id: number) {
+  return db.getFirstAsync<WaitEntry>(
+    `SELECT w.*, c.name AS client_name, c.phone AS client_phone, c.telegram AS client_telegram
+     FROM waitlist w JOIN clients c ON c.id = w.client_id WHERE w.id = ?`,
+    id,
+  );
+}
+
+export async function saveWaitEntry(db: Db, w: { id?: number; client_id: number; days: string; part: string; note: string; until: string | null }) {
+  if (w.id) {
+    await db.runAsync('UPDATE waitlist SET client_id = ?, days = ?, part = ?, note = ?, until = ? WHERE id = ?',
+      w.client_id, w.days, w.part, w.note, w.until, w.id);
+    return w.id;
+  }
+  const r = await db.runAsync(
+    'INSERT INTO waitlist (client_id, days, part, note, until, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    w.client_id, w.days, w.part, w.note, w.until, Date.now(),
+  );
+  return r.lastInsertRowId;
+}
+
+/** Убрать из листа ожидания (записали или передумала) */
+export async function closeWaitEntry(db: Db, id: number) {
+  await db.runAsync('UPDATE waitlist SET done_at = ? WHERE id = ?', Date.now(), id);
+}
+
+export async function reopenWaitEntry(db: Db, id: number) {
+  await db.runAsync('UPDATE waitlist SET done_at = NULL WHERE id = ?', id);
 }
 
 // ---------- Финансы ----------

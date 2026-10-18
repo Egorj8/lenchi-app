@@ -6,6 +6,7 @@ import { useToast } from '@/components/Toast';
 import { Button, Field, success } from '@/components/ui';
 import { pickContact } from '@/utils/contacts';
 import { formatPhone } from '@/utils/phone';
+import { birthdayInput, parseBirthday } from '@/utils/attention';
 import { emitDataChanged } from '@/utils/events';
 import { deleteClient, getClient, getSettings, restoreClient, saveClient } from '@/db/queries';
 import { colors, space } from '@/theme';
@@ -20,6 +21,7 @@ export default function ClientEdit() {
   const [phone, setPhone] = useState('');
   const [telegram, setTelegram] = useState('');
   const [notes, setNotes] = useState('');
+  const [birthday, setBirthday] = useState('');
   const [saving, setSaving] = useState(false);
   const toast = useToast();
 
@@ -31,6 +33,7 @@ export default function ClientEdit() {
       setPhone(formatPhone(c.phone));
       setTelegram(c.telegram);
       setNotes(c.notes);
+      setBirthday(birthdayInput(c.birthday));
     });
   }, [db, editId]);
 
@@ -38,7 +41,12 @@ export default function ClientEdit() {
     if (!name.trim()) return showAlert('Введите имя');
     setSaving(true);
     try {
-      const newId = await saveClient(db, { id: editId, name, phone, telegram, notes });
+      const bd = parseBirthday(birthday);
+      if (bd === undefined) {
+        setSaving(false);
+        return showAlert('День рождения', 'Напишите дату как 12.03 или 12.03.1990.');
+      }
+      const newId = await saveClient(db, { id: editId, name, phone, telegram, notes, birthday: bd });
       success();
       if (editId) router.back();
       else router.replace(`/client/${newId}`);
@@ -88,6 +96,14 @@ export default function ClientEdit() {
           placeholder="@username"
           autoCapitalize="none"
           autoCorrect={false}
+        />
+        <Field
+          label="День рождения"
+          value={birthday}
+          onChangeText={setBirthday}
+          placeholder="12.03 или 12.03.1990"
+          keyboardType="numbers-and-punctuation"
+          hint="Утром в этот день придёт напоминание и готовое поздравление."
         />
         <Field label="Заметки" value={notes} onChangeText={setNotes} placeholder="Форма ногтей, любимые оттенки, аллергия…" multiline />
         <Button title="Сохранить" icon="checkmark" onPress={save} loading={saving} />

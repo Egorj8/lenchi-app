@@ -1,13 +1,15 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useDb } from '@/db/provider';
 import { useCallback, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Button, Chip, Field, SectionTitle, success } from '@/components/ui';
 import { getSettings, saveSettings, type Settings } from '@/db/queries';
 import { DEFAULT_SETTINGS } from '@/db/schema';
 import { colors, space } from '@/theme';
 import { parseTime } from '@/utils/date';
 import { COUNTRIES } from '@/utils/phone';
+import { emitDataChanged } from '@/utils/events';
+import { requestNotifyPermission } from '@/utils/notify';
 import { showAlert } from '@/utils/dialog';
 
 const WEEK = [
@@ -35,6 +37,7 @@ export default function SettingsScreen() {
     if (ws === null || we === null || we <= ws) return showAlert('Проверьте рабочие часы', 'Формат ЧЧ:ММ, конец позже начала.');
     if (!Number(s.slot_length)) return showAlert('Укажите длину окошка в минутах');
     await saveSettings(db, s);
+    emitDataChanged(); // пересоберёт утреннюю сводку с новым временем
     success();
     router.back();
   };
@@ -75,6 +78,38 @@ export default function SettingsScreen() {
           hint="Например, 120: в посте будут 11:00, 13:00, 15:00, 17:00."
         />
 
+        <SectionTitle>Подсказки и уведомления</SectionTitle>
+        <View style={st.switchRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.switchLabel}>Утренняя сводка</Text>
+            <Text style={st.hint}>Записи на день, кому не отправлено напоминание, дни рождения.</Text>
+          </View>
+          <Switch
+            value={s.notify_morning === '1'}
+            onValueChange={async (v) => {
+              if (v && !(await requestNotifyPermission())) {
+                showAlert('Уведомления выключены', 'Разрешите уведомления для Lenchi Studio в настройках телефона.', [
+                  { text: 'Отмена', style: 'cancel' },
+                  { text: 'Открыть настройки', onPress: () => Linking.openSettings() },
+                ]);
+                return;
+              }
+              set('notify_morning')(v ? '1' : '0');
+            }}
+            trackColor={{ true: colors.yellow3, false: colors.surface }}
+            thumbColor={s.notify_morning === '1' ? colors.yellow : colors.muted}
+          />
+        </View>
+        {s.notify_morning === '1' ? (
+          <View style={st.row}>
+            {['08:00', '09:00', '10:00'].map((t) => <Chip key={t} label={t} selected={s.morning_time === t} onPress={() => set('morning_time')(t)} />)}
+          </View>
+        ) : null}
+        <Text style={st.label}>«Пора на коррекцию» — через сколько дней после визита</Text>
+        <View style={st.row}>
+          {['14', '21', '28', '35'].map((d) => <Chip key={d} label={`${d} дн.`} selected={s.rebook_days === d} onPress={() => set('rebook_days')(d)} />)}
+        </View>
+
         <SectionTitle>Шаблоны сообщений</SectionTitle>
         <Field
           label="Напоминание клиентке"
@@ -83,13 +118,38 @@ export default function SettingsScreen() {
           multiline
           hint="Подстановки: {имя}, {дата}, {время}, {услуга}, {адрес}, {мастер}, {телефон}"
         />
+        <Field
+          label="Пора на коррекцию"
+          value={s.rebook_template}
+          onChangeText={set('rebook_template')}
+          multiline
+          hint="Подстановки: {имя}, {дней}, {окошки}, {мастер}"
+        />
+        <Field label="Поздравление с днём рождения" value={s.birthday_template} onChangeText={set('birthday_template')} multiline hint="Подстановки: {имя}, {мастер}" />
+        <Field
+          label="Освободилось время (лист ожидания)"
+          value={s.waitlist_template}
+          onChangeText={set('waitlist_template')}
+          multiline
+          hint="Подстановки: {имя}, {дата}, {время}, {мастер}"
+        />
         <Field label="Начало поста «Свободные окошки»" value={s.slots_header} onChangeText={set('slots_header')} multiline hint="Можно использовать {телефон}" />
         <Field label="Конец поста" value={s.slots_footer} onChangeText={set('slots_footer')} multiline />
         <Button
           title="Вернуть шаблоны по умолчанию"
           variant="ghost"
           icon="refresh"
-          onPress={() => setS({ ...s, reminder_template: DEFAULT_SETTINGS.reminder_template, slots_header: DEFAULT_SETTINGS.slots_header, slots_footer: DEFAULT_SETTINGS.slots_footer })}
+          onPress={() =>
+            setS({
+              ...s,
+              reminder_template: DEFAULT_SETTINGS.reminder_template,
+              slots_header: DEFAULT_SETTINGS.slots_header,
+              slots_footer: DEFAULT_SETTINGS.slots_footer,
+              rebook_template: DEFAULT_SETTINGS.rebook_template,
+              birthday_template: DEFAULT_SETTINGS.birthday_template,
+              waitlist_template: DEFAULT_SETTINGS.waitlist_template,
+            })
+          }
         />
 
         <Button title="Сохранить" icon="checkmark" onPress={save} style={{ marginTop: space.lg }} />
@@ -103,4 +163,7 @@ const st = StyleSheet.create({
   content: { padding: space.lg, paddingTop: 0 },
   label: { color: colors.muted, fontSize: 13, marginBottom: 8, fontWeight: '600' },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: space.lg },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.md },
+  switchLabel: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  hint: { color: colors.dim, fontSize: 12, marginTop: 2, lineHeight: 17 },
 });

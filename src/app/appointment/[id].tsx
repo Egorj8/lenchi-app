@@ -12,6 +12,7 @@ import {
   getAppointmentServices,
   getSettings,
   setAppointmentStatus,
+  setReminded,
   type Appointment,
   type ApptService,
   type Settings,
@@ -22,6 +23,7 @@ import { fmtDayLong, fmtDuration, fmtTime, relativeDay } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp, reminderText } from '@/utils/messages';
 import { formatPhone } from '@/utils/phone';
 import { emitDataChanged } from '@/utils/events';
+import { offerFreedSlot } from '@/utils/waitlistOffer';
 
 export default function AppointmentScreen() {
   const db = useDb();
@@ -48,16 +50,22 @@ export default function AppointmentScreen() {
   const rel = relativeDay(a.date);
 
   const setStatus = async (st: Status) => {
+    const wasActive = a.status === 'planned';
     await setAppointmentStatus(db, a.id, st);
     success();
     load();
+    emitDataChanged();
+    if (st === 'cancelled' && wasActive) offerFreedSlot(db, a.date, a.start);
   };
 
   // удаляем сразу, но с возможностью вернуть (и запись остаётся в корзине)
   const remove = async () => {
     const id = a.id;
+    const freed = a.status === 'planned' ? { date: a.date, start: a.start } : null;
     await deleteAppointment(db, id);
     router.back();
+    emitDataChanged();
+    if (freed) setTimeout(() => offerFreedSlot(db, freed.date, freed.start), 400);
     toast({
       message: 'Запись удалена',
       icon: 'trash-outline',
@@ -66,6 +74,13 @@ export default function AppointmentScreen() {
   };
 
   const text = reminderText(a, settings);
+  // отмечаем, что напоминание отправлено — для утренней сводки «кому не отправлено»
+  const remind = async (send: () => void) => {
+    send();
+    await setReminded(db, a.id);
+    emitDataChanged();
+    load();
+  };
   const phone = a.client_phone ?? '';
   const tg = a.client_telegram ?? '';
 
@@ -105,10 +120,19 @@ export default function AppointmentScreen() {
 
       {a.client_id ? (
         <>
-          <SectionTitle>Напомнить о записи</SectionTitle>
+          <SectionTitle
+            right={a.reminded_at ? (
+              <View style={s.sent}>
+                <Ionicons name="checkmark-done" size={14} color={colors.success} />
+                <Text style={s.sentText}>отправлено</Text>
+              </View>
+            ) : null}
+          >
+            Напомнить о записи
+          </SectionTitle>
           <View style={s.actions}>
-            <ActionCircle icon="logo-whatsapp" label="WhatsApp" accent onPress={() => openWhatsApp(phone, text)} />
-            <ActionCircle icon="paper-plane" label="Telegram" onPress={() => openTelegram(tg, phone, text)} />
+            <ActionCircle icon="logo-whatsapp" label="WhatsApp" accent onPress={() => remind(() => openWhatsApp(phone, text))} />
+            <ActionCircle icon="paper-plane" label="Telegram" onPress={() => remind(() => openTelegram(tg, phone, text))} />
             <ActionCircle icon="call" label="Позвонить" onPress={() => call(phone)} />
           </View>
           <View style={s.preview}>
@@ -170,6 +194,8 @@ export default function AppointmentScreen() {
 }
 
 const s = StyleSheet.create({
+  sent: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  sentText: { color: colors.success, fontSize: 12, fontWeight: '700' },
   content: { padding: space.lg, paddingTop: 0 },
   hero: { marginBottom: space.lg },
   date: { color: colors.muted, fontSize: 15 },

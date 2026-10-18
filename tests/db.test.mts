@@ -62,9 +62,9 @@ async function addVisit(db: Db, name: string, phone: string, date: string) {
   return { client_id, id };
 }
 
-test('новая база: схема v4, услуги из прайса', async () => {
+test('новая база: схема v5, услуги из прайса', async () => {
   const db = await fresh();
-  assert.equal((await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))!.user_version, 4);
+  assert.equal((await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version'))!.user_version, 5);
   assert.equal((await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM services'))!.n, 8);
 });
 

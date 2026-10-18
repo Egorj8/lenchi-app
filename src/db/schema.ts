@@ -1,7 +1,7 @@
 import { normalizePhone } from '@/utils/phone';
 import type { Db } from './types';
 
-const DATABASE_VERSION = 4;
+const DATABASE_VERSION = 5;
 
 // Прайс Елены со страницы записи в ГномГуру
 const SEED_SERVICES: [string, string, number, number][] = [
@@ -27,12 +27,25 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   work_end: '19:00',
   slot_length: '120',
   last_auto_backup: '0',
+  rebook_days: '21',
+  notify_morning: '1',
+  morning_time: '09:00',
+  rebook_template:
+    'Здравствуйте, {имя}! 💅 Прошло уже {дней} дн. с прошлого маникюра — пора обновить. Есть свободное время: {окошки}. Записать вас? {мастер}',
+  birthday_template: '{имя}, с днём рождения! 🎂💐 Желаю счастья, здоровья и красоты — и пусть ноготки всегда радуют! {мастер}',
+  waitlist_template: 'Здравствуйте, {имя}! Освободилось время {дата} в {время}. Записать вас? {мастер}',
   last_shared_backup: '0',
   reminder_template:
     'Здравствуйте, {имя}! 💅 Напоминаю о записи {дата} в {время}: {услуга}.\nАдрес: {адрес}\nЕсли планы изменились, напишите, пожалуйста. {мастер}',
   slots_header: 'Не пора ли нам записаться на маникюр/педикюр на удобное время?\nМой телефон {телефон}\n\n⏱ Свободное время для записи в ближайшие дни:',
   slots_footer: 'Если не подошло ничего, пишите в личку, что-нибудь придумаем 😉',
 };
+
+/** Добавить столбец, если его ещё нет (миграция переживёт повтор после сбоя) */
+async function addColumn(db: Db, table: string, column: string, type: string) {
+  const cols = await db.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`);
+  if (!cols.some((c) => c.name === column)) await db.execAsync(`ALTER TABLE ${table} ADD COLUMN ${column} ${type};`);
+}
 
 async function createViews(db: Db) {
   await db.execAsync(`
@@ -42,6 +55,8 @@ async function createViews(db: Db) {
     CREATE VIEW live_appointments AS SELECT * FROM appointments WHERE deleted_at IS NULL;
     DROP VIEW IF EXISTS live_events;
     CREATE VIEW live_events AS SELECT * FROM events WHERE deleted_at IS NULL;
+    DROP VIEW IF EXISTS live_waitlist;
+    CREATE VIEW live_waitlist AS SELECT * FROM waitlist WHERE done_at IS NULL;
   `);
 }
 
@@ -132,10 +147,8 @@ export async function migrateDbIfNeeded(db: Db) {
 
   if (current < 3) {
     // v3: корзина — мягкое удаление записей и клиенток
-    await db.execAsync(`
-      ALTER TABLE clients ADD COLUMN deleted_at INTEGER;
-      ALTER TABLE appointments ADD COLUMN deleted_at INTEGER;
-    `);
+    await addColumn(db, 'clients', 'deleted_at', 'INTEGER');
+    await addColumn(db, 'appointments', 'deleted_at', 'INTEGER');
   }
   if (current < 4) {
     // v4: личные дела мастера (магазин, пробежка…) — планировщик рядом с записями
@@ -157,6 +170,25 @@ export async function migrateDbIfNeeded(db: Db) {
         deleted_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+    `);
+  }
+
+  if (current < 5) {
+    // v5: этап 3 — дни рождения, «пора на коррекцию», отметка о напоминании, лист ожидания
+    await addColumn(db, 'clients', 'birthday', 'TEXT');
+    await addColumn(db, 'clients', 'rebook_snoozed_until', 'TEXT');
+    await addColumn(db, 'appointments', 'reminded_at', 'INTEGER');
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS waitlist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+        days TEXT NOT NULL DEFAULT '',
+        part TEXT NOT NULL DEFAULT 'any',
+        note TEXT NOT NULL DEFAULT '',
+        until TEXT,
+        created_at INTEGER NOT NULL,
+        done_at INTEGER
+      );
     `);
   }
 

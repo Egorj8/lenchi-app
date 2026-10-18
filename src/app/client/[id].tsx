@@ -9,6 +9,8 @@ import { colors, space, statusMeta } from '@/theme';
 import { fmtDayLong, fmtDayShort, fmtTime, todayKey } from '@/utils/date';
 import { call, money, openTelegram, openWhatsApp } from '@/utils/messages';
 import { formatPhone } from '@/utils/phone';
+import { fmtBirthday, nextBirthday } from '@/utils/attention';
+import { plural } from '@/utils/date';
 
 export default function ClientScreen() {
   const db = useDb();
@@ -54,6 +56,7 @@ export default function ClientScreen() {
         <Text style={s.muted}>
           {[formatPhone(c.phone), c.telegram ? `@${c.telegram}` : ''].filter(Boolean).join(' · ') || 'Контакты не указаны'}
         </Text>
+        {c.birthday ? <BirthdayLine stored={c.birthday} /> : null}
       </View>
 
       <View style={s.actions}>
@@ -73,6 +76,13 @@ export default function ClientScreen() {
         icon="calendar"
         onPress={() => router.push({ pathname: '/appointment/edit', params: { clientId: String(c.id) } })}
         style={{ marginTop: space.lg }}
+      />
+      <Button
+        title="В лист ожидания"
+        icon="hourglass-outline"
+        variant="secondary"
+        onPress={() => router.push({ pathname: '/waitlist-edit', params: { clientId: String(c.id) } })}
+        style={{ marginTop: space.sm }}
       />
 
       {c.notes ? (
@@ -105,6 +115,16 @@ export default function ClientScreen() {
       )}
       <View style={{ height: 40 }} />
     </ScrollView>
+  );
+}
+
+function BirthdayLine({ stored }: { stored: string }) {
+  const n = nextBirthday(stored, todayKey());
+  const when = n.daysLeft === 0 ? 'сегодня! 🎉' : n.daysLeft <= 14 ? `через ${n.daysLeft} ${plural(n.daysLeft, 'день', 'дня', 'дней')}` : '';
+  return (
+    <Text style={[s.muted, n.daysLeft === 0 && { color: colors.yellow1, fontWeight: '700' }]}>
+      🎂 {fmtBirthday(stored)}{n.age ? ` · ${n.age - (n.daysLeft === 0 ? 0 : 1)} ${plural(n.age - (n.daysLeft === 0 ? 0 : 1), 'год', 'года', 'лет')}` : ''}{when ? ` · ${when}` : ''}
+    </Text>
   );
 }
 

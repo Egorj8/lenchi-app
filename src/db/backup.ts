@@ -3,7 +3,7 @@
 import { normalizeAllPhones, SCHEMA_VERSION } from './schema';
 import type { Db, Param } from './types';
 
-const TABLES = ['settings', 'services', 'clients', 'appointments', 'appointment_services', 'events'] as const;
+const TABLES = ['settings', 'services', 'clients', 'appointments', 'appointment_services', 'events', 'waitlist'] as const;
 
 // Настройки самого телефона, а не данные мастера: при восстановлении не трогаем
 const DEVICE_KEYS = ['last_auto_backup', 'last_shared_backup'];
@@ -44,13 +44,13 @@ export function parseBackup(text: string): BackupData {
   }
   for (const t of TABLES) {
     // в старых копиях этих разделов ещё не было
-    if ((t === 'appointment_services' || t === 'events') && d[t] === undefined) continue;
+    if ((t === 'appointment_services' || t === 'events' || t === 'waitlist') && d[t] === undefined) continue;
     if (!Array.isArray(d[t])) throw new Error(`В копии повреждён раздел «${t}».`);
   }
   if ((d.schema ?? 1) > SCHEMA_VERSION) {
     throw new Error('Копия сделана в более новой версии приложения. Обновите приложение и попробуйте снова.');
   }
-  return { appointment_services: [], events: [], ...d } as BackupData;
+  return { appointment_services: [], events: [], waitlist: [], ...d } as BackupData;
 }
 
 export function summarize(d: BackupData): BackupSummary {
@@ -82,7 +82,7 @@ export async function restoreAll(db: Db, d: BackupData) {
 
   await db.withTransactionAsync(async () => {
     // порядок важен из-за внешних ключей
-    for (const t of ['appointment_services', 'appointments', 'clients', 'services', 'settings', 'events'] as Table[]) {
+    for (const t of ['waitlist', 'appointment_services', 'appointments', 'clients', 'services', 'settings', 'events'] as Table[]) {
       await db.runAsync(`DELETE FROM ${t}`);
     }
     for (const t of TABLES) {
