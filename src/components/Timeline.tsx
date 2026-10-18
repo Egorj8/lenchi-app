@@ -173,7 +173,8 @@ function ApptBlock({ a, pos, h, compact, narrow, onPress }: {
     >
       {compact ? (
         // в неделе колонка узкая: время видно по сетке, показываем только имя (или инициалы)
-        <Text style={[s.blockTitle, s.compactText, faded && s.strike]} numberOfLines={3}>
+        // одна строка с «…»: иначе узкая колонка рвёт имя по слогам («Натал / ья»)
+        <Text style={[s.blockTitle, s.compactText, faded && s.strike]} numberOfLines={1}>
           {narrow ? initials(a.client_name) : (a.client_name ?? '—').split(' ')[0]}
         </Text>
       ) : (

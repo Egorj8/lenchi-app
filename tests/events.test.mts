@@ -8,6 +8,8 @@ import { migrateDbIfNeeded } from '../src/db/schema.ts';
 import { deleteEvent, listEventsBetween, restoreEvent, saveEvent, trashCount } from '../src/db/queries.ts';
 import { exportAll, parseBackup, restoreAll } from '../src/db/backup.ts';
 import { busyIntervals, expandEvents } from '../src/utils/personal.ts';
+import { computeFreeSlots } from '../src/utils/freeSlots.ts';
+import { DEFAULT_SETTINGS } from '../src/db/schema.ts';
 
 const SQL = await initSqlJs();
 
@@ -130,4 +132,11 @@ test('дела попадают в резервную копию; старая �
   delete old.events;
   await restoreAll(other, parseBackup(JSON.stringify(old)));
   assert.equal((await listEventsBetween(other, '2026-10-20', '2026-10-20')).length, 0, 'старая копия заменяет данные целиком');
+});
+
+test('свободные окошки начинаются с ровных :00 / :30', () => {
+  // пятница 23.10.2026, запись 13:00–15:10
+  const appt = { id: 1, date: '2026-10-23', start: 780, duration: 130, status: 'planned' } as never;
+  const slots = computeFreeSlots({ ...DEFAULT_SETTINGS, work_start: '11:00', work_end: '19:00', slot_length: '120' }, [appt], '2026-10-23', 1);
+  assert.deepEqual(slots[0].times, [660, 930]); // 11:00 и 15:30 (а не 15:10)
 });
