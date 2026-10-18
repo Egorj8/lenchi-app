@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Application from 'expo-application';
 import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
@@ -14,6 +15,13 @@ import { showAlert } from '@/utils/dialog';
 import { confirmAndRestore } from '@/utils/restoreFlow';
 
 const DAY = 86_400_000;
+
+// версия и номер сборки — по ним видно, что на телефоне действительно стоит новый APK
+function versionLabel() {
+  const v = Application.nativeApplicationVersion;
+  const b = Application.nativeBuildVersion;
+  return v ? `Lenchi Studio · версия ${v}${b ? ` (сборка ${b})` : ''}` : 'Lenchi Studio';
+}
 
 export default function MoreScreen() {
   const db = useDb();
@@ -136,7 +144,7 @@ export default function MoreScreen() {
         </Card>
 
         <View style={s.footer}>
-          <Text style={s.footerText}>Lenchi Studio · версия 1.2</Text>
+          <Text style={s.footerText}>{versionLabel()}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
