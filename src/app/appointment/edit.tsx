@@ -6,6 +6,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Button, Chip, Field, SectionTitle, success, tap, styles as ui } from '@/components/ui';
 import {
+  filterClients,
   findConflicts,
   getAppointment,
   getAppointmentServices,
@@ -134,10 +135,7 @@ export default function AppointmentEdit() {
     return out.sort((a, b) => a.t - b.t);
   }, [settings, dayAppts, dayBusy, duration, editId, start]);
 
-  const filteredClients = clients.filter((c) => {
-    const q = clientQuery.trim().toLowerCase();
-    return !q || c.name.toLowerCase().includes(q) || c.phone.includes(q) || c.telegram.toLowerCase().includes(q);
-  });
+  const filteredClients = filterClients(clients, clientQuery);
   const selectedClient = clients.find((c) => c.id === clientId);
 
   // Выбор из телефонной книги: если номер уже в базе — берём эту клиентку

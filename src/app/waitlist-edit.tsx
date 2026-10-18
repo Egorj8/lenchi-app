@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Avatar, Button, Chip, Field, SectionTitle, success, tap } from '@/components/ui';
 import { useDb } from '@/db/provider';
-import { closeWaitEntry, getWaitEntry, listClients, saveWaitEntry, type ClientRow } from '@/db/queries';
+import { closeWaitEntry, filterClients, getWaitEntry, listClients, saveWaitEntry, type ClientRow } from '@/db/queries';
 import { colors, radius, space } from '@/theme';
 import { DAY_PARTS, type DayPart } from '@/utils/attention';
 import { addDays, fmtDayLong, todayKey } from '@/utils/date';
@@ -46,7 +46,7 @@ export default function WaitlistEdit() {
 
   const picked = clients.find((c) => c.id === client);
   const q = query.trim().toLowerCase();
-  const found = clients.filter((c) => !q || c.name.toLowerCase().includes(q) || c.phone.includes(q)).slice(0, 6);
+  const found = filterClients(clients, q).slice(0, 6);
 
   const save = async () => {
     if (!client) return showAlert('Выберите клиентку');

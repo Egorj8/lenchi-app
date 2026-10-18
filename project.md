@@ -27,13 +27,13 @@
 src/app/            экраны (Expo Router)
   (tabs)/           Календарь, Клиенты, Финансы, Ещё
   appointment/      запись: просмотр [id], создание/правка edit
-  client/           клиентка, правка, импорт из контактов
+  client/           клиентка, правка, импорт из контактов (import) и из ГномГуру (gnom)
   event/edit.tsx    личное дело
   slots, services, settings, trash, backups
   online, requests  онлайн-запись: ключ облака и заявки с сайта (облако — supabase/schema.sql)
 src/components/     Timeline (сетка по часам), MonthView, NewChooser («что добавить?»), Toast, ui
 src/db/             schema (миграции), queries, backup, provider (+ .web для браузера), types
-src/utils/          date, calendar, phone, contacts, personal (дела/повторы), freeSlots, cloud/cloudSync/cloudStore (облако), messages, backupFiles, dialog, events
+src/utils/          date, calendar, phone, contacts, personal (дела/повторы), freeSlots, cloud/cloudSync/cloudStore (облако), gnomImport (Excel ГномГуру), names (обращение), messages, backupFiles, dialog, events
 tests/              логика и база на sql.js (npm test)
 scripts/            make-icons.js — генерация иконок
 ```

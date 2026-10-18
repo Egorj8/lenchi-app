@@ -1,12 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useDb } from '@/db/provider';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Avatar, Button, Card, Empty, Fab, IconButton, ScreenTitle } from '@/components/ui';
 import { AttentionBar } from '@/components/AttentionBar';
-import { clientsWithBirthday, getSettings, listClients, listWaitlist, rebookCandidates, type ClientRow } from '@/db/queries';
+import { clientsWithBirthday, filterClients, getSettings, listClients, listWaitlist, rebookCandidates, type ClientRow } from '@/db/queries';
 import { nextBirthday } from '@/utils/attention';
 import { colors, radius, space } from '@/theme';
 import { fmtDayShort, plural, todayKey } from '@/utils/date';
@@ -25,25 +25,27 @@ const chooseImport = () =>
 export default function ClientsScreen() {
   const db = useDb();
   const [query, setQuery] = useState('');
-  const [clients, setClients] = useState<ClientRow[]>([]);
+  const [all, setAll] = useState<ClientRow[]>([]);
+  // список грузится один раз, поиск — по загруженному (клиенток больше тысячи)
+  const clients = useMemo(() => filterClients(all, query), [all, query]);
   const [counts, setCounts] = useState({ rebook: 0, birthdays: 0, waitlist: 0 });
 
   const load = useCallback(async () => {
     const t = todayKey();
     const s = await getSettings(db);
     const [list, rebook, bd, wait] = await Promise.all([
-      listClients(db, t, query),
+      listClients(db, t),
       rebookCandidates(db, t, Number(s.rebook_days) || 21),
       clientsWithBirthday(db),
       listWaitlist(db, t),
     ]);
-    setClients(list);
+    setAll(list);
     setCounts({
       rebook: rebook.length,
       birthdays: bd.filter((c) => nextBirthday(c.birthday!, t).daysLeft <= 14).length,
       waitlist: wait.length,
     });
-  }, [db, query]);
+  }, [db]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
   useDataChanged(load);

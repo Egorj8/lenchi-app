@@ -105,17 +105,25 @@ export async function saveService(db: Db, s: Omit<Service, 'id' | 'sort' | 'arch
 
 // ---------- Клиенты ----------
 
+// одна группировка по записям вместо четырёх подзапросов на каждую клиентку (их больше тысячи)
 const CLIENT_STATS = `
-  SELECT c.*,
-    (SELECT COUNT(*) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS visits,
-    (SELECT COALESCE(SUM(price), 0) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS spent,
-    (SELECT MAX(date) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'done') AS last_visit,
-    (SELECT MIN(date) FROM live_appointments a WHERE a.client_id = c.id AND a.status = 'planned' AND a.date >= ?) AS next_visit
-  FROM live_clients c`;
+  SELECT c.*, COALESCE(v.visits, 0) AS visits, COALESCE(v.spent, 0) AS spent, v.last_visit, v.next_visit
+  FROM live_clients c LEFT JOIN (
+    SELECT client_id,
+      SUM(status = 'done') AS visits,
+      SUM(CASE WHEN status = 'done' THEN price ELSE 0 END) AS spent,
+      MAX(CASE WHEN status = 'done' THEN date END) AS last_visit,
+      MIN(CASE WHEN status = 'planned' AND date >= ? THEN date END) AS next_visit
+    FROM live_appointments WHERE client_id IS NOT NULL GROUP BY client_id
+  ) v ON v.client_id = c.id`;
 
 export async function listClients(db: Db, today: string, query = '') {
   const rows = await db.getAllAsync<ClientRow>(`${CLIENT_STATS} ORDER BY c.name COLLATE NOCASE`, today);
-  // ищем в JS: lower() и LIKE в SQLite не понимают регистр русских букв
+  return filterClients(rows, query);
+}
+
+/** Поиск по имени, обращению, @telegram и цифрам номера. В JS: lower() и LIKE в SQLite не понимают регистр русских букв */
+export function filterClients<T extends Client>(rows: T[], query: string): T[] {
   const q = query.trim().toLowerCase();
   if (!q) return rows;
   const digits = q.replace(/\D/g, '');
