@@ -2,11 +2,14 @@
 // Текст зависит от записей, поэтому расписание пересобирается при каждом запуске,
 // сворачивании приложения и изменении данных (повторяющееся уведомление было бы с устаревшим текстом).
 import * as Notifications from 'expo-notifications';
+import { router, type Href } from 'expo-router';
+import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { clientsWithBirthday, getSettings, listAppointmentsBetween, rebookCandidates } from '@/db/queries';
 import type { Db } from '@/db/types';
 import { morningSummary, nextBirthday } from './attention';
-import { addDays, parseTime, todayKey } from './date';
+import type { CloudRequest } from './cloud';
+import { addDays, fmtDayShort, fmtTime, parseTime, todayKey, weekdayShort } from './date';
 
 const CHANNEL = 'morning';
 const PREFIX = 'morning-';
@@ -97,6 +100,40 @@ async function doReschedule(db: Db) {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: at, channelId: CHANNEL },
     });
   }
+}
+
+/** Новые заявки со страницы записи — сразу, отдельным каналом с высокой важностью */
+export async function notifyNewRequests(fresh: CloudRequest[]) {
+  configure();
+  if (!fresh.length || !(await notifyPermissionGranted())) return;
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('requests', {
+      name: 'Заявки с сайта',
+      importance: Notifications.AndroidImportance.HIGH,
+      lightColor: '#ffc61a',
+    });
+  }
+  const r = fresh[0];
+  const when = `${weekdayShort(r.day).toLowerCase()} ${fmtDayShort(r.day)} в ${fmtTime(r.start_min)}`;
+  const services = r.services.map((x) => x.name).filter(Boolean).join(', ');
+  await Notifications.scheduleNotificationAsync({
+    identifier: `request-${r.id}`,
+    content: {
+      title: fresh.length === 1 ? 'Новая заявка с сайта' : `Новых заявок с сайта: ${fresh.length}`,
+      body: fresh.length === 1 ? `${r.name} · ${when}${services ? ` · ${services}` : ''}` : fresh.map((x) => x.name).join(', '),
+      data: { url: '/requests' },
+    },
+    trigger: Platform.OS === 'android' ? { channelId: 'requests' } : null,
+  });
+}
+
+/** Нажатие на уведомление открывает нужный экран (data.url) */
+export function useNotificationRouting() {
+  const response = Notifications.useLastNotificationResponse();
+  useEffect(() => {
+    const url = response?.notification.request.content.data?.url;
+    if (typeof url === 'string' && url !== '/') router.push(url as Href);
+  }, [response]);
 }
 
 export const notificationsSupported = true;

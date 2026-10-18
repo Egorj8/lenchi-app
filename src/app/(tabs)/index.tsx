@@ -15,6 +15,7 @@ import { addMonths, monthGrid, sameMonth, weekDays } from '@/utils/calendar';
 import { addDays, fmtDayLong, fmtDayShort, fmtMonth, fromKey, nowMinutes, parseTime, plural, relativeDay, todayKey, weekday, weekdayShort } from '@/utils/date';
 import { money, workDays as getWorkDays } from '@/utils/messages';
 import { useDataChanged } from '@/utils/events';
+import { useCloud } from '@/utils/cloudStore';
 import { category, expandEvents, type EventOccurrence } from '@/utils/personal';
 
 type Mode = 'day' | 'week' | 'month';
@@ -33,6 +34,7 @@ export default function CalendarScreen() {
   const [events, setEvents] = useState<EventOccurrence[]>([]);
   const [bdClients, setBdClients] = useState<Client[]>([]);
   const [chooser, setChooser] = useState<{ date: string; start?: number } | null>(null);
+  const cloud = useCloud();
 
   const week = useMemo(() => weekDays(selected), [selected]);
 
@@ -130,6 +132,16 @@ export default function CalendarScreen() {
             ) : null
           }
         />
+
+        {cloud.newCount ? (
+          <Pressable onPress={() => { tap(); router.push('/requests'); }} style={({ pressed }) => [s.requests, pressed && { opacity: 0.75 }]}>
+            <Ionicons name="notifications" size={18} color={colors.ink} />
+            <Text style={s.requestsText} numberOfLines={1}>
+              {cloud.newCount === 1 ? 'Новая заявка с сайта' : `Новых заявок с сайта: ${cloud.newCount}`}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.ink} />
+          </Pressable>
+        ) : null}
 
         {/* переключатель вида */}
         <View style={s.segment}>
@@ -306,6 +318,11 @@ const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: space.lg, paddingTop: space.md },
   ink: { color: colors.ink },
+  requests: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.yellow,
+    paddingHorizontal: space.md, paddingVertical: 10, borderRadius: radius.md, marginBottom: space.md,
+  },
+  requestsText: { color: colors.ink, fontSize: 15, fontWeight: '800', flex: 1 },
   allDay: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: space.lg, paddingBottom: space.sm },
   allDayChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6,

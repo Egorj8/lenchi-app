@@ -6,7 +6,7 @@ import type { Db, Param } from './types';
 const TABLES = ['settings', 'services', 'clients', 'appointments', 'appointment_services', 'events', 'waitlist'] as const;
 
 // Настройки самого телефона, а не данные мастера: при восстановлении не трогаем
-const DEVICE_KEYS = ['last_auto_backup', 'last_shared_backup'];
+const DEVICE_KEYS = ['last_auto_backup', 'last_shared_backup', 'cloud_config_hash', 'cloud_busy_hash', 'cloud_seen_id', 'cloud_last_sync'];
 type Table = (typeof TABLES)[number];
 type Row = Record<string, unknown>;
 

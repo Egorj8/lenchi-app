@@ -61,6 +61,8 @@ export default function RootLayout() {
             <Stack.Screen name="settings" options={{ title: 'Настройки' }} />
             <Stack.Screen name="trash" options={{ title: 'Корзина' }} />
             <Stack.Screen name="backups" options={{ title: 'Автокопии' }} />
+            <Stack.Screen name="requests" options={{ title: 'Заявки с сайта' }} />
+            <Stack.Screen name="online" options={{ title: 'Онлайн-запись' }} />
           </Stack>
           </ToastProvider>
         </DbProvider>

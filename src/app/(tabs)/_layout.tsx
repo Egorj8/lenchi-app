@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Tabs } from 'expo-router';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { AppState, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { IconName } from '@/components/ui';
@@ -8,7 +8,8 @@ import { useDb } from '@/db/provider';
 import { emptyTrash, TRASH_DAYS } from '@/db/queries';
 import { autoBackupIfNeeded } from '@/utils/backupFiles';
 import { useDataChanged } from '@/utils/events';
-import { rescheduleMorning, requestNotifyPermission } from '@/utils/notify';
+import { runCloudSync } from '@/utils/cloudStore';
+import { rescheduleMorning, requestNotifyPermission, useNotificationRouting } from '@/utils/notify';
 import { colors } from '@/theme';
 
 const icon = (name: IconName, active: IconName) =>
@@ -40,6 +41,23 @@ export default function TabLayout() {
     return () => sub.remove();
   }, [reschedule]);
   useDataChanged(reschedule);
+
+  // онлайн-запись: обмен с облаком при запуске, возвращении в приложение, раз в 3 минуты,
+  // и через пару секунд после изменений (записи, услуги, график) — чтобы сайт показывал верное время
+  const sync = useCallback(() => { runCloudSync(db); }, [db]);
+  useEffect(() => {
+    sync();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') sync(); });
+    const id = setInterval(() => { if (AppState.currentState === 'active') sync(); }, 3 * 60_000);
+    return () => { sub.remove(); clearInterval(id); };
+  }, [sync]);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const syncSoon = useCallback(() => {
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(sync, 2000);
+  }, [sync]);
+  useDataChanged(syncSoon);
+  useNotificationRouting();
   return (
     <Tabs
       screenOptions={{

@@ -13,6 +13,7 @@ import { backupFilesSupported, markSharedBackup, pickBackupText, saveBackupToFol
 import { plural } from '@/utils/date';
 import { showAlert } from '@/utils/dialog';
 import { confirmAndRestore } from '@/utils/restoreFlow';
+import { useCloud } from '@/utils/cloudStore';
 
 const DAY = 86_400_000;
 
@@ -28,6 +29,7 @@ export default function MoreScreen() {
   const [lastShared, setLastShared] = useState(0);
   const [trash, setTrash] = useState(0);
   const [busy, setBusy] = useState(false);
+  const cloud = useCloud();
 
   const load = useCallback(async () => {
     const [s, t] = await Promise.all([getSettings(db), trashCount(db)]);
@@ -109,6 +111,12 @@ export default function MoreScreen() {
 
         <SectionTitle>Работа</SectionTitle>
         <Card style={s.group}>
+          <Row
+            icon="globe-outline"
+            label="Онлайн-запись"
+            value={cloud.newCount ? `${cloud.newCount} ${plural(cloud.newCount, 'заявка', 'заявки', 'заявок')}` : cloud.configured ? 'вкл' : 'выкл'}
+            onPress={() => router.push(cloud.newCount ? '/requests' : '/online')}
+          />
           <Row icon="pricetags-outline" label="Услуги и цены" onPress={() => router.push('/services')} />
           <Row icon="time-outline" label="Свободные окошки" onPress={() => router.push('/slots')} />
           <Row icon="settings-outline" label="Настройки" onPress={() => router.push('/settings')} last />
